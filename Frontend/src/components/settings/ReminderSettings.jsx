@@ -2,7 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../../config/firebase';
 import { saveSettings, getSettings } from '../../services/firestoreService';
+<<<<<<< HEAD
 import schedulerLogo from '../../assets/scheduler-logo.png';
+=======
+import Sidebar from '../common/Sidebar';
+>>>>>>> 72b0ccc3d9b09b0b3660f4436dd3ae11a3fbd025
 import Toast from '../common/Toast';
 import './ReminderSettings.css';
 
@@ -418,6 +422,7 @@ const ReminderSettings = ({ isModal = false, onClose }) => {
 
     return (
         <div className="settings-container">
+<<<<<<< HEAD
             {/* Sidebar */}
             <aside className="sidebar">
                 <div className="sidebar-logo">
@@ -484,6 +489,9 @@ const ReminderSettings = ({ isModal = false, onClose }) => {
             </aside>
 
             {/* Main Content */}
+=======
+            <Sidebar activeNav="settings" />
+>>>>>>> 72b0ccc3d9b09b0b3660f4436dd3ae11a3fbd025
             <MainContent />
         </div>
     );
