@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { auth } from '../../config/firebase';
 import { getStudyPlan, getProgress, getAchievements } from '../../services/firestoreService';
 import { subjectsData } from '../../data/subjectsData';
+import { grades, getSubjectsForGrade, getTopicsForSubject } from '../../data/gradesData';
 import schedulerLogo from '../../assets/scheduler-logo.png';
 import './Gamification.css';
 
 const Gamification = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [activeNav, setActiveNav] = useState('gamification');
     const [studyPlan, setStudyPlan] = useState(null);
     const [progress, setProgress] = useState({ xpPoints: 0, studyStreak: 0, completedSessions: 0 });
@@ -16,6 +18,15 @@ const Gamification = () => {
     const [showManualSelect, setShowManualSelect] = useState(false);
     const [manualSubjects, setManualSubjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    // Quiz configuration state
+    const [selectedGrade, setSelectedGrade] = useState('');
+    const [selectedTopic, setSelectedTopic] = useState('');
+    const [numQuestions, setNumQuestions] = useState(10);
+    const [quizTime, setQuizTime] = useState(15);
+    const [difficulty, setDifficulty] = useState('Mixed');
+    const [availableSubjects, setAvailableSubjects] = useState([]);
+    const [availableTopics, setAvailableTopics] = useState([]);
 
     // Level thresholds and titles
     const levelThresholds = [
@@ -166,26 +177,68 @@ const Gamification = () => {
         return [];
     };
 
-    // Handle subject selection for quiz
+    // Handle grade selection
+    const handleGradeChange = (grade) => {
+        setSelectedGrade(grade);
+        setSelectedSubject(null);
+        setSelectedTopic('');
+
+        if (grade) {
+            const subjects = getSubjectsForGrade(grade, subjectsData);
+            setAvailableSubjects(subjects);
+        } else {
+            setAvailableSubjects([]);
+        }
+        setAvailableTopics([]);
+    };
+
+    // Handle subject selection for quiz (for both plan and manual selection)
     const handleSubjectSelect = (subject) => {
         setSelectedSubject(subject);
+        setSelectedTopic('');
+
+        // Load topics for this subject
+        const topics = getTopicsForSubject(subject, subjectsData);
+        setAvailableTopics(topics);
+    };
+
+    // Handle topic selection
+    const handleTopicChange = (topic) => {
+        setSelectedTopic(topic);
     };
 
     // Handle starting quiz
     const handleEnterQuiz = () => {
-        if (selectedSubject) {
-            navigate(`/quiz?subject=${encodeURIComponent(selectedSubject)}`);
+        if (!selectedSubject) {
+            alert('Please select a subject to start the quiz.');
+            return;
         }
+
+        // Validate manual selection mode requirements
+        if (!hasPlan) {
+            if (!selectedGrade) {
+                alert('Please select your grade level.');
+                return;
+            }
+            if (!selectedTopic) {
+                alert('Please select a topic.');
+                return;
+            }
+        }
+
+        // Navigate to quiz with configuration
+        navigate('/quiz', {
+            state: {
+                grade: selectedGrade || studyPlan?.grade || '10',
+                subject: selectedSubject,
+                topic: selectedTopic,
+                numQuestions,
+                time: quizTime,
+                difficulty
+            }
+        });
     };
 
-    // Toggle manual subject selection
-    const handleManualSubjectToggle = (subject) => {
-        setManualSubjects(prev =>
-            prev.includes(subject)
-                ? prev.filter(s => s !== subject)
-                : [...prev, subject]
-        );
-    };
 
     // Get badges with unlock status
     const getBadges = () => {
@@ -352,58 +405,26 @@ const Gamification = () => {
                             </p>
                         </div>
 
-                        {/* Select Subjects Card */}
+                        {/* Quiz Configuration Card */}
                         <div className="card subjects-card">
-                            <h2>Select Subjects</h2>
+                            <h2>Quiz Configuration</h2>
 
                             {hasPlan ? (
-                                <div className="subjects-grid">
-                                    {planSubjects.map((subject, index) => (
-                                        <button
-                                            key={index}
-                                            className={`subject-chip ${selectedSubject === subject ? 'selected' : ''}`}
-                                            onClick={() => handleSubjectSelect(subject)}
-                                            style={{
-                                                backgroundColor: selectedSubject === subject
-                                                    ? (subjectColors[subject]?.color || subjectColors.default.color)
-                                                    : (subjectColors[subject]?.bg || subjectColors.default.bg),
-                                                color: selectedSubject === subject
-                                                    ? '#fff'
-                                                    : (subjectColors[subject]?.color || subjectColors.default.color)
-                                            }}
-                                        >
-                                            <span className="subject-icon">
-                                                {subjectIcons[subject] || subjectIcons.default}
-                                            </span>
-                                            {subject}
-                                        </button>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="no-plan-message">
-                                    <p>No study plan found. Select subjects manually or create a study plan.</p>
-                                    <button
-                                        className="manual-select-btn"
-                                        onClick={() => setShowManualSelect(!showManualSelect)}
-                                    >
-                                        {showManualSelect ? 'Hide Subjects' : 'Select Subjects Manually'}
-                                    </button>
-
-                                    {showManualSelect && (
-                                        <div className="manual-subjects-grid">
-                                            {allSubjects.slice(0, 12).map((subject, index) => (
+                                <>
+                                    {/* For users with study plan - show subject chips */}
+                                    <div className="quiz-config-section">
+                                        <label className="quiz-config-label">Select Subject</label>
+                                        <div className="subjects-grid">
+                                            {planSubjects.map((subject, index) => (
                                                 <button
                                                     key={index}
-                                                    className={`subject-chip ${manualSubjects.includes(subject) ? 'selected' : ''}`}
-                                                    onClick={() => {
-                                                        handleManualSubjectToggle(subject);
-                                                        handleSubjectSelect(subject);
-                                                    }}
+                                                    className={`subject-chip ${selectedSubject === subject ? 'selected' : ''}`}
+                                                    onClick={() => handleSubjectSelect(subject)}
                                                     style={{
-                                                        backgroundColor: manualSubjects.includes(subject)
+                                                        backgroundColor: selectedSubject === subject
                                                             ? (subjectColors[subject]?.color || subjectColors.default.color)
                                                             : (subjectColors[subject]?.bg || subjectColors.default.bg),
-                                                        color: manualSubjects.includes(subject)
+                                                        color: selectedSubject === subject
                                                             ? '#fff'
                                                             : (subjectColors[subject]?.color || subjectColors.default.color)
                                                     }}
@@ -415,16 +436,153 @@ const Gamification = () => {
                                                 </button>
                                             ))}
                                         </div>
+                                    </div>
+
+                                    {/* Topic selection for plan users */}
+                                    {selectedSubject && availableTopics.length > 0 && (
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">Select Topic</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={selectedTopic}
+                                                onChange={(e) => setSelectedTopic(e.target.value)}
+                                            >
+                                                <option value="">All Topics (Mixed)</option>
+                                                {availableTopics.map((topic, index) => (
+                                                    <option key={index} value={topic}>{topic}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     )}
-                                </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* For users without study plan - show dropdowns */}
+                                    <p className="quiz-config-description">
+                                        Select your grade, subject, and topic to start a quiz
+                                    </p>
+
+                                    {/* Grade Selection */}
+                                    <div className="quiz-config-section">
+                                        <label className="quiz-config-label">1. Select Your Grade</label>
+                                        <select
+                                            className="quiz-dropdown"
+                                            value={selectedGrade}
+                                            onChange={(e) => handleGradeChange(e.target.value)}
+                                        >
+                                            <option value="">Choose grade...</option>
+                                            {grades.map((grade) => (
+                                                <option key={grade.id} value={grade.value}>
+                                                    {grade.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Subject Selection */}
+                                    {selectedGrade && (
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">2. Select Subject</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={selectedSubject || ''}
+                                                onChange={(e) => handleSubjectSelect(e.target.value)}
+                                            >
+                                                <option value="">Choose subject...</option>
+                                                {availableSubjects.map((subject, index) => (
+                                                    <option key={index} value={subject.name}>
+                                                        {subject.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {/* Topic Selection */}
+                                    {selectedSubject && availableTopics.length > 0 && (
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">3. Select Topic</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={selectedTopic}
+                                                onChange={(e) => handleTopicChange(e.target.value)}
+                                            >
+                                                <option value="">Choose topic...</option>
+                                                {availableTopics.map((topic, index) => (
+                                                    <option key={index} value={topic}>{topic}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Quiz Settings - shown after subject is selected */}
+                            {selectedSubject && (
+                                <>
+                                    <div className="quiz-settings-divider"></div>
+                                    <h3 className="quiz-settings-title">Quiz Settings</h3>
+
+                                    <div className="quiz-settings-grid">
+                                        {/* Number of Questions */}
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">Number of Questions</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={numQuestions}
+                                                onChange={(e) => setNumQuestions(Number(e.target.value))}
+                                            >
+                                                <option value="5">5 questions</option>
+                                                <option value="10">10 questions</option>
+                                                <option value="15">15 questions</option>
+                                                <option value="20">20 questions</option>
+                                                <option value="25">25 questions</option>
+                                                <option value="30">30 questions</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Time Duration */}
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">Time Duration</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={quizTime}
+                                                onChange={(e) => setQuizTime(Number(e.target.value))}
+                                            >
+                                                <option value="5">5 minutes</option>
+                                                <option value="10">10 minutes</option>
+                                                <option value="15">15 minutes</option>
+                                                <option value="20">20 minutes</option>
+                                                <option value="30">30 minutes</option>
+                                                <option value="45">45 minutes</option>
+                                                <option value="60">60 minutes</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Difficulty Level */}
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">Difficulty Level</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={difficulty}
+                                                onChange={(e) => setDifficulty(e.target.value)}
+                                            >
+                                                <option value="Easy">Easy</option>
+                                                <option value="Medium">Medium</option>
+                                                <option value="Hard">Hard</option>
+                                                <option value="Mixed">Mixed (All Levels)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </>
                             )}
 
                             <button
                                 className="enter-quiz-btn"
                                 onClick={handleEnterQuiz}
-                                disabled={!selectedSubject}
+                                disabled={!selectedSubject || (!hasPlan && (!selectedGrade || !selectedTopic))}
                             >
-                                Enter Quiz
+                                🎯 Enter Quiz
                             </button>
                         </div>
 
