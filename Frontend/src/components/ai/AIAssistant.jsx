@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import Sidebar from '../common/Sidebar';
+import { useLanguage } from '../../i18n/LanguageContext';
 import './AIAssistant.css';
 
 const AIAssistant = () => {
     const [isLoading, setIsLoading] = useState(true);
+    const { t } = useLanguage();
 
     return (
         <div className="ai-assistant-container">
@@ -16,7 +18,7 @@ const AIAssistant = () => {
                 {isLoading && (
                     <div className="ai-loading-overlay">
                         <div className="ai-loading-spinner"></div>
-                        <p>Loading AI Assistant...</p>
+                        <p>{t('common_loading')}</p>
                     </div>
                 )}
 
