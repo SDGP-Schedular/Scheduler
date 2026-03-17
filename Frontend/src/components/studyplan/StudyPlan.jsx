@@ -1,14 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import Sidebar from '../common/Sidebar';
 import { auth } from '../../config/firebase';
-import { getStudyPlan, getPlanHistory, restorePlan, archiveCurrentPlan, unlockAchievement, addXpPoints, resetProgress, deleteStudyPlan } from '../../services/firestoreService';
+import { getStudyPlan, getPlanHistory, restorePlan, archiveCurrentPlan, unlockAchievement, addXpPoints, resetProgress, deleteStudyPlan, deletePlanFromHistory, saveStudyPlan } from '../../services/firestoreService';
 import { getSubjectWeight, calculateStudyTime } from '../../data/subjectsData';
+import { useLanguage } from '../../i18n/LanguageContext';
 import schedulerLogo from '../../assets/scheduler-logo.png';
 import './StudyPlan.css';
 
 const StudyPlan = () => {
     const navigate = useNavigate();
-    const [activeNav, setActiveNav] = useState('schedule');
+    const { t } = useLanguage();
     const [studyPlan, setStudyPlan] = useState(null);
     const [weekDays, setWeekDays] = useState([]);
     const [isExporting, setIsExporting] = useState(false);
@@ -16,6 +18,45 @@ const StudyPlan = () => {
     const [planHistory, setPlanHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
     const contentRef = useRef(null);
+
+    // Time editing state
+    const [editingSession, setEditingSession] = useState(null);
+    const [customTimes, setCustomTimes] = useState(() => {
+        const cached = localStorage.getItem('customSessionTimes');
+        return cached ? JSON.parse(cached) : {};
+    });
+
+    // Sticky Notes state
+    const [showStickyNotes, setShowStickyNotes] = useState(false);
+    const [stickySelectedSubject, setStickySelectedSubject] = useState(null);
+    const [stickyNoteText, setStickyNoteText] = useState('');
+    const [stickyNotes, setStickyNotes] = useState(() => {
+        const cached = localStorage.getItem('stickyNotes');
+        if (!cached) return {};
+        const raw = JSON.parse(cached);
+        // Migrate old keys to normalized format (lowercase, trimmed)
+        const migrated = {};
+        for (const [key, value] of Object.entries(raw)) {
+            const [name, topicsStr] = key.split('|');
+            const normName = (name || '').trim().toLowerCase();
+            const normTopics = (topicsStr || '').split(',').map(t => t.trim().toLowerCase()).filter(Boolean).sort().join(',');
+            const normKey = `${normName}|${normTopics}`;
+            // Keep the most recent note if there's a collision
+            if (!migrated[normKey]) migrated[normKey] = value;
+        }
+        // Write back if different
+        if (JSON.stringify(migrated) !== cached) {
+            localStorage.setItem('stickyNotes', JSON.stringify(migrated));
+        }
+        return migrated;
+    });
+
+    // Generate a normalized key for sticky notes: lowercase + trim + sorted topics
+    const getStickyNoteKey = (subject) => {
+        const name = (subject.name || '').trim().toLowerCase();
+        const topics = (subject.topics || []).map(t => t.trim().toLowerCase()).sort().join(',');
+        return `${name}|${topics}`;
+    };
 
     useEffect(() => {
         const loadStudyPlan = async () => {
@@ -54,6 +95,13 @@ const StudyPlan = () => {
 
         loadStudyPlan();
     }, [navigate]);
+
+    // Preload plan history in background for faster modal display
+    useEffect(() => {
+        if (auth.currentUser) {
+            loadPlanHistory();
+        }
+    }, []);
 
     // Subject colors and icons mapping
     const subjectStyles = {
@@ -108,62 +156,112 @@ const StudyPlan = () => {
 
         const sessions = [];
         const prefs = plan.preferences;
-        const timeSlots = getTimeSlots(prefs.preferredTime, prefs.sessionDuration);
+        const timeSlots = getTimeSlots(
+            prefs.preferredTime,
+            prefs.sessionDuration,
+            prefs.breakInterval
+        );
 
-        // Distribute subjects across time slots
-        plan.subjects.forEach((subject, subjectIndex) => {
-            if (timeSlots[subjectIndex % timeSlots.length]) {
-                const slot = timeSlots[subjectIndex % timeSlots.length];
-                const topics = subject.topics.slice(0, 2);
+        // Knowledge multipliers for sorting by need
+        const knowledgeMultipliers = {
+            beginner: 1.5,
+            intermediate: 1.0,
+            advanced: 0.75,
+            expert: 0.5
+        };
 
-                sessions.push({
-                    subject: subject.name,
-                    startTime: slot.start,
-                    endTime: slot.end,
-                    topics: topics.length > 0 ? topics.join(' - ') : 'General Study'
-                });
-            }
+        // Sort subjects by need: weight × inverse knowledge (highest need first)
+        const sortedSubjects = [...plan.subjects].sort((a, b) => {
+            const needA = getSubjectWeight(a.name) * (knowledgeMultipliers[a.knowledgeLevel] || 1.0);
+            const needB = getSubjectWeight(b.name) * (knowledgeMultipliers[b.knowledgeLevel] || 1.0);
+            return needB - needA;
         });
+
+        // IMPORTANT:
+        // Only schedule as many subjects as available slots for this day.
+        // Rotate subjects across days so all subjects get covered through the week.
+        const sessionsPerDay = Math.min(timeSlots.length, sortedSubjects.length);
+        const startOffset = (dayIndex * sessionsPerDay) % sortedSubjects.length;
+
+        for (let i = 0; i < sessionsPerDay; i++) {
+            const subject = sortedSubjects[(startOffset + i) % sortedSubjects.length];
+            const slot = timeSlots[i];
+            const topics = subject.topics.slice(0, 2);
+
+            sessions.push({
+                subject: subject.name,
+                startTime: slot.start,
+                endTime: slot.end,
+                topics: topics.length > 0 ? topics.join(' - ') : 'General Study'
+            });
+        }
 
         return sessions;
     };
 
-    // Get time slots based on preferred time
-    const getTimeSlots = (preferredTime, duration) => {
-        const slots = {
-            morning: [
-                { start: '9:00 AM', end: '11:00 AM' },
-                { start: '11:00 AM', end: '12:00 PM' }
-            ],
-            afternoon: [
-                { start: '2:00 PM', end: '4:00 PM' },
-                { start: '4:00 PM', end: '5:00 PM' }
-            ],
-            evening: [
-                { start: '6:00 PM', end: '8:00 PM' },
-                { start: '8:00 PM', end: '9:00 PM' }
-            ]
-        };
-        return slots[preferredTime] || slots.morning;
+    const formatTo12Hour = (hour24, minute = 0) => {
+        const modifier = hour24 >= 12 ? 'PM' : 'AM';
+        const hour12 = hour24 % 12 || 12;
+        return `${hour12}:${minute.toString().padStart(2, '0')} ${modifier}`;
     };
 
-    // Calculate total hours per subject using weight-based calculation
+    // Get time slots based on preferred time + duration + break interval
+    const getTimeSlots = (preferredTime, duration = 60, breakInterval = 15) => {
+        const windows = {
+            morning: { startHour: 9, endHour: 12 },
+            afternoon: { startHour: 14, endHour: 17 },
+            evening: { startHour: 18, endHour: 21 }
+        };
+
+        const { startHour, endHour } = windows[preferredTime] || windows.morning;
+        const slots = [];
+
+        let currentMinutes = startHour * 60;
+        const endMinutes = endHour * 60;
+
+        while (currentMinutes + duration <= endMinutes) {
+            const startHour24 = Math.floor(currentMinutes / 60);
+            const startMin = currentMinutes % 60;
+            const endTotal = currentMinutes + duration;
+            const endHour24 = Math.floor(endTotal / 60);
+            const endMin = endTotal % 60;
+
+            slots.push({
+                start: formatTo12Hour(startHour24, startMin),
+                end: formatTo12Hour(endHour24, endMin)
+            });
+
+            currentMinutes = endTotal + breakInterval;
+        }
+
+        return slots.length ? slots : [{ start: '9:00 AM', end: '10:00 AM' }];
+    };
+
+    // Calculate total hours per subject using weight AND knowledge level
     const getSubjectHours = () => {
         if (!studyPlan?.subjects) return [];
 
+        // Knowledge inverse multiplier: lower knowledge = more study time
+        const knowledgeMultipliers = {
+            beginner: 1.5,      // needs 50% more time
+            intermediate: 1.0,  // baseline
+            advanced: 0.75,     // needs 25% less time
+            expert: 0.5         // needs 50% less time
+        };
+
         return studyPlan.subjects.map(subject => {
-            // Get subject weight (1-10 scale, higher = more difficult)
             const weight = getSubjectWeight(subject.name);
-            // Calculate study time using weight formula: baseTime × (0.8 + weight/10 × 0.7)
-            const baseHours = 4; // Base hours per subject
-            const topicBonus = subject.topics.length * 0.5; // Additional hours for topics
+            const baseHours = 4;
+            const topicBonus = subject.topics.length * 0.5;
             const weightMultiplier = 0.8 + (weight / 10) * 0.7;
-            const hours = Math.ceil((baseHours + topicBonus) * weightMultiplier);
+            const knowledgeFactor = knowledgeMultipliers[subject.knowledgeLevel] || 1.0;
+            const hours = Math.ceil((baseHours + topicBonus) * weightMultiplier * knowledgeFactor);
 
             return {
                 name: subject.name,
                 hours,
                 weight,
+                knowledgeLevel: subject.knowledgeLevel || 'intermediate',
                 ...getSubjectStyle(subject.name)
             };
         });
@@ -216,23 +314,74 @@ const StudyPlan = () => {
     const handleRestorePlan = async (plan) => {
         if (!auth.currentUser) return;
 
+        // Strip archive fields to make a clean plan
+        const { archivedAt, archiveId, id, ...cleanPlan } = plan;
+
+        // Optimistic UI update — instant
+        setStudyPlan(cleanPlan);
+        generateWeekSchedule(cleanPlan);
+        localStorage.setItem('studyPlan', JSON.stringify(cleanPlan));
+        setShowHistoryModal(false);
+
+        // Push to Firestore in background
+        restorePlan(auth.currentUser.uid, plan)
+            .then(() => {
+                localStorage.removeItem('planHistory');
+                loadPlanHistory();
+            })
+            .catch(error => {
+                console.error('Error restoring plan to Firestore:', error);
+            });
+    };
+
+    // Delete a plan from history
+    const handleDeletePlan = async (plan) => {
+        if (!auth.currentUser) return;
+        if (!window.confirm('Are you sure you want to delete this plan from history?')) return;
+
+        const planArchiveId = plan.archiveId || plan.id;
+
+        // Optimistic UI update — remove immediately
+        const updatedHistory = planHistory.filter(p => (p.archiveId || p.id) !== planArchiveId);
+        setPlanHistory(updatedHistory);
+        localStorage.setItem('planHistory', JSON.stringify(updatedHistory));
+
+        // Delete from Firestore in background
         try {
-            const result = await restorePlan(auth.currentUser.uid, plan);
-            if (result.success) {
-                setStudyPlan(plan);
-                generateWeekSchedule(plan);
-                setShowHistoryModal(false);
+            if (planArchiveId) {
+                await deletePlanFromHistory(auth.currentUser.uid, planArchiveId);
             }
         } catch (error) {
-            console.error('Error restoring plan:', error);
+            console.error('Error deleting plan:', error);
+            // If Firestore delete failed, refresh from server to stay in sync
+            loadPlanHistory();
         }
     };
 
     // Handle Regenerate button click - archives current plan, resets progress, and clears exam dates
     const handleRegenerate = () => {
-        // Clear existing plan from localStorage FIRST
+        // Archive current plan to localStorage history IMMEDIATELY (synchronous)
+        const currentPlanJSON = localStorage.getItem('studyPlan');
+        if (currentPlanJSON) {
+            try {
+                const currentPlan = JSON.parse(currentPlanJSON);
+                const historyJSON = localStorage.getItem('planHistory');
+                const history = historyJSON ? JSON.parse(historyJSON) : [];
+                history.unshift({
+                    ...currentPlan,
+                    id: Date.now().toString(),
+                    archivedAt: new Date().toISOString()
+                });
+                localStorage.setItem('planHistory', JSON.stringify(history));
+            } catch (e) {
+                console.error('Error archiving plan to local history:', e);
+            }
+        }
+
+        // Clear existing plan from localStorage
         localStorage.removeItem('studyPlan');
-        localStorage.removeItem('planHistory');
+        localStorage.removeItem('completedTasks');
+        localStorage.removeItem('customSessionTimes');
 
         // Navigate immediately - don't wait for Firestore
         navigate('/scheduling');
@@ -241,7 +390,7 @@ const StudyPlan = () => {
         if (auth.currentUser) {
             (async () => {
                 try {
-                    // Archive current plan to history before regenerating
+                    // Archive current plan to Firestore history
                     await archiveCurrentPlan(auth.currentUser.uid);
 
                     // Delete the study plan from Firestore (clears exam dates)
@@ -411,34 +560,88 @@ const StudyPlan = () => {
         }
     };
 
-    const handleNavigation = (nav) => {
-        setActiveNav(nav);
-        switch (nav) {
-            case 'home':
-                navigate('/dashboard');
-                break;
-            case 'schedule':
-                navigate('/study-plan');
-                break;
-            case 'calendar':
-                navigate('/calendar');
-                break;
-            case 'stats':
-                navigate('/analytics');
-                break;
-            case 'ai':
-                navigate('/ai-assistant');
-                break;
-            case 'settings':
-                // Future settings page
-                break;
-            default:
-                break;
+    const handleSessionClick = (session) => {
+        const confirmHelp = window.confirm(`Would you like to ask the AI Assistant for help with ${session.subject}?`);
+        if (confirmHelp) {
+            navigate('/ai-assistant', { state: { subject: session.subject, topics: session.topics } });
         }
     };
 
+    // Open time-edit modal for a session card
+    const handleSessionCardClick = (dayIndex, sessionIndex, session) => {
+        const key = `${dayIndex}-${sessionIndex}`;
+        const override = customTimes[key];
+        setEditingSession({
+            dayIndex,
+            sessionIndex,
+            subject: session.subject,
+            startTime: override?.startTime || session.startTime,
+            endTime: override?.endTime || session.endTime
+        });
+    };
+
+    // Save custom time for a session
+    const handleSaveTime = () => {
+        if (!editingSession) return;
+        const key = `${editingSession.dayIndex}-${editingSession.sessionIndex}`;
+        const updated = {
+            ...customTimes,
+            [key]: { startTime: editingSession.startTime, endTime: editingSession.endTime }
+        };
+        setCustomTimes(updated);
+        localStorage.setItem('customSessionTimes', JSON.stringify(updated));
+
+        // Update weekDays state immediately so the card reflects the change
+        setWeekDays(prev => prev.map((day, di) => {
+            if (di !== editingSession.dayIndex) return day;
+            return {
+                ...day,
+                sessions: day.sessions.map((s, si) => {
+                    if (si !== editingSession.sessionIndex) return s;
+                    return { ...s, startTime: editingSession.startTime, endTime: editingSession.endTime };
+                })
+            };
+        }));
+
+        // Persist to Firestore in background
+        if (auth.currentUser && studyPlan) {
+            const updatedPlan = { ...studyPlan, customSessionTimes: updated };
+            saveStudyPlan(auth.currentUser.uid, updatedPlan).catch(e => console.error('Error saving custom times:', e));
+        }
+
+        setEditingSession(null);
+    };
+
+    // Helper to convert 12h to 24h for time input
+    const to24h = (time12) => {
+        if (!time12) return '09:00';
+        const [time, modifier] = time12.split(' ');
+        let [hours, minutes] = time.split(':').map(Number);
+        if (modifier === 'PM' && hours !== 12) hours += 12;
+        if (modifier === 'AM' && hours === 12) hours = 0;
+        return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    };
+
+    // Helper to convert 24h to 12h for display
+    const to12h = (time24) => {
+        if (!time24) return '9:00 AM';
+        let [hours, minutes] = time24.split(':').map(Number);
+        const modifier = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12 || 12;
+        return `${hours}:${minutes.toString().padStart(2, '0')} ${modifier}`;
+    };
+
+
+
     if (!studyPlan) {
-        return <div className="loading">Loading your study plan...</div>;
+        return (
+            <div className="study-plan-container">
+                <Sidebar activeNav="study-plan" />
+                <main className="study-plan-main">
+                    <div className="loading">{t('common_loading')}</div>
+                </main>
+            </div>
+        );
     }
 
     const today = new Date();
@@ -450,107 +653,7 @@ const StudyPlan = () => {
     return (
         <div className="study-plan-container">
             {/* Sidebar */}
-            <aside className="sidebar">
-                <div className="sidebar-logo">
-                    <img src={schedulerLogo} alt="Scheduler" className="sidebar-logo-img" />
-                </div>
-
-                <nav className="sidebar-nav">
-                    {/* Home/Dashboard */}
-                    <button
-                        className={`nav-item ${activeNav === 'home' ? 'active' : ''}`}
-                        onClick={() => handleNavigation('home')}
-                        title="Dashboard"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                            <polyline points="9,22 9,12 15,12 15,22" />
-                        </svg>
-                    </button>
-
-                    {/* Study Plan */}
-                    <button
-                        className={`nav-item ${activeNav === 'schedule' ? 'active' : ''}`}
-                        onClick={() => handleNavigation('schedule')}
-                        title="Study Plan"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                            <polyline points="14,2 14,8 20,8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                        </svg>
-                    </button>
-
-                    {/* Analytics */}
-                    <button
-                        className={`nav-item ${activeNav === 'stats' ? 'active' : ''}`}
-                        onClick={() => handleNavigation('stats')}
-                        title="Analytics"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="20" x2="18" y2="10" />
-                            <line x1="12" y1="20" x2="12" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="14" />
-                        </svg>
-                    </button>
-
-                    {/* Calendar */}
-                    <button
-                        className={`nav-item ${activeNav === 'calendar' ? 'active' : ''}`}
-                        onClick={() => handleNavigation('calendar')}
-                        title="Calendar"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                    </button>
-
-                    {/* Gamification - Trophy Icon */}
-                    <button
-                        className={`nav-item ${activeNav === 'gamification' ? 'active' : ''}`}
-                        onClick={() => handleNavigation('gamification')}
-                        title="Gamification"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
-                            <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
-                            <path d="M4 22h16" />
-                            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                            <path d="M18 2H6v7a6 6 0 0012 0V2z" />
-                        </svg>
-                    </button>
-
-                    {/* AI Assistant - Brain Icon */}
-                    <button
-                        className={`nav-item ${activeNav === 'ai' ? 'active' : ''}`}
-                        onClick={() => navigate('/ai-assistant')}
-                        title="AI Assistant"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44A2.5 2.5 0 015.5 17a2.5 2.5 0 01-1.94-4.06A2.5 2.5 0 015.5 9a2.5 2.5 0 011.5-4.56A2.5 2.5 0 019.5 2z" />
-                            <path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44A2.5 2.5 0 0018.5 17a2.5 2.5 0 001.94-4.06A2.5 2.5 0 0018.5 9a2.5 2.5 0 00-1.5-4.56A2.5 2.5 0 0014.5 2z" />
-                        </svg>
-                    </button>
-
-
-                    {/* Settings */}
-                    <button
-                        className={`nav-item ${activeNav === 'settings' ? 'active' : ''}`}
-                        onClick={() => handleNavigation('settings')}
-                        title="Settings"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-                        </svg>
-                    </button>
-                </nav>
-            </aside>
+            <Sidebar activeNav="study-plan" />
 
             {/* Main Content */}
             <main className="study-plan-main" ref={contentRef}>
@@ -559,7 +662,7 @@ const StudyPlan = () => {
                     <div className="header-left">
                         <img src={schedulerLogo} alt="Scheduler" className="header-logo" />
                         <div className="header-title">
-                            <h1>Scheduler</h1>
+                            <h1>{t('app_name')}</h1>
                             <p>Your personalized learning schedule</p>
                         </div>
                     </div>
@@ -592,7 +695,7 @@ const StudyPlan = () => {
                 <div className="plan-summary">
                     <div className="summary-header">
                         <div>
-                            <h2>Weekly Study Plan</h2>
+                            <h2>{t('dashboard_weekly_progress')}</h2>
                             <p>
                                 {weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}-
                                 {weekEnd.toLocaleDateString('en-US', { day: 'numeric', year: 'numeric' })} •
@@ -614,6 +717,15 @@ const StudyPlan = () => {
                                     <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
                                 </svg>
                                 Regenerate
+                            </button>
+                            <button className="sticky-notes-btn" onClick={() => { setShowStickyNotes(true); setStickySelectedSubject(null); setStickyNoteText(''); }}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M15.5 3H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2V8.5L15.5 3z" />
+                                    <polyline points="14,3 14,9 21,9" />
+                                    <line x1="9" y1="13" x2="15" y2="13" />
+                                    <line x1="9" y1="17" x2="15" y2="17" />
+                                </svg>
+                                Sticky Notes
                             </button>
                         </div>
                     </div>
@@ -663,8 +775,9 @@ const StudyPlan = () => {
                                         return (
                                             <div
                                                 key={sessionIndex}
-                                                className="session-card"
-                                                style={{ backgroundColor: style.bg }}
+                                                className={`session-card ${customTimes[`${dayIndex}-${sessionIndex}`] ? 'session-edited' : ''}`}
+                                                style={{ backgroundColor: style.bg, cursor: 'pointer' }}
+                                                onClick={() => handleSessionCardClick(dayIndex, sessionIndex, session)}
                                             >
                                                 <div className="session-header">
                                                     <span
@@ -673,7 +786,19 @@ const StudyPlan = () => {
                                                     >
                                                         {style.icon} {session.subject}
                                                     </span>
-                                                    <span className="session-link">🔗</span>
+                                                    <div className="session-header-icons">
+                                                        {customTimes[`${dayIndex}-${sessionIndex}`] && (
+                                                            <span className="edited-badge" title="Custom time">✏️</span>
+                                                        )}
+                                                        <span
+                                                            className="session-link"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleSessionClick(session);
+                                                            }}
+                                                            title="Get AI Help"
+                                                        >🔗</span>
+                                                    </div>
                                                 </div>
                                                 <div className="session-time">
                                                     {session.startTime} - {session.endTime}
@@ -696,14 +821,14 @@ const StudyPlan = () => {
                 <div className="history-modal-overlay" onClick={() => setShowHistoryModal(false)}>
                     <div className="history-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="history-modal-header">
-                            <h2>📚 Study Plan History</h2>
+                            <h2>📚 {t('study_plan_history')}</h2>
                             <button className="close-btn" onClick={() => setShowHistoryModal(false)}>×</button>
                         </div>
                         <div className="history-modal-content">
                             {loadingHistory ? (
                                 <div className="loading-history">
                                     <div className="spinner"></div>
-                                    <p>Loading history...</p>
+                                    <p>{t('common_loading')}</p>
                                 </div>
                             ) : planHistory.length === 0 ? (
                                 <div className="empty-history">
@@ -721,21 +846,209 @@ const StudyPlan = () => {
                                                     {plan.subjects?.map(s => s.name).join(', ') || 'No subjects'}
                                                 </p>
                                                 <span className="history-date">
-                                                    Archived: {plan.archivedAt?.toDate ?
-                                                        new Date(plan.archivedAt.toDate()).toLocaleDateString() :
-                                                        plan.createdAt ? new Date(plan.createdAt).toLocaleDateString() : 'Unknown'}
+                                                    Archived: {plan.archivedAt
+                                                        ? new Date(typeof plan.archivedAt === 'string' ? plan.archivedAt : plan.archivedAt?.toDate ? plan.archivedAt.toDate() : plan.archivedAt).toLocaleDateString()
+                                                        : plan.createdAt ? new Date(plan.createdAt).toLocaleDateString() : 'Unknown'}
                                                 </span>
                                             </div>
-                                            <button
-                                                className="restore-btn"
-                                                onClick={() => handleRestorePlan(plan)}
-                                            >
-                                                Restore
-                                            </button>
+                                            <div className="history-item-actions">
+                                                <button
+                                                    className="restore-btn"
+                                                    onClick={() => handleRestorePlan(plan)}
+                                                >
+                                                    Restore
+                                                </button>
+                                                <button
+                                                    className="delete-history-btn"
+                                                    onClick={() => handleDeletePlan(plan)}
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Time Edit Modal */}
+            {editingSession && (
+                <div className="history-modal-overlay" onClick={() => setEditingSession(null)}>
+                    <div className="time-edit-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="history-modal-header">
+                            <h2>⏰ Adjust Time — {editingSession.subject}</h2>
+                            <button className="close-btn" onClick={() => setEditingSession(null)}>×</button>
+                        </div>
+                        <div className="time-edit-content">
+                            <p className="time-edit-day">
+                                {weekDays[editingSession.dayIndex]?.name}, {weekDays[editingSession.dayIndex]?.date}
+                            </p>
+                            <div className="time-input-group">
+                                <div className="time-field">
+                                    <label>Start Time</label>
+                                    <input
+                                        type="time"
+                                        value={to24h(editingSession.startTime)}
+                                        onChange={(e) => setEditingSession(prev => ({
+                                            ...prev,
+                                            startTime: to12h(e.target.value)
+                                        }))}
+                                    />
+                                </div>
+                                <div className="time-field">
+                                    <label>End Time</label>
+                                    <input
+                                        type="time"
+                                        value={to24h(editingSession.endTime)}
+                                        onChange={(e) => setEditingSession(prev => ({
+                                            ...prev,
+                                            endTime: to12h(e.target.value)
+                                        }))}
+                                    />
+                                </div>
+                            </div>
+                            <div className="time-edit-actions">
+                                <button className="time-cancel-btn" onClick={() => setEditingSession(null)}>Cancel</button>
+                                <button className="time-save-btn" onClick={handleSaveTime}>Save Changes</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Sticky Notes Modal */}
+            {showStickyNotes && studyPlan && (
+                <div className="history-modal-overlay" onClick={() => setShowStickyNotes(false)}>
+                    <div className="sticky-notes-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="history-modal-header">
+                            <h2>📝 Sticky Notes</h2>
+                            <button className="close-btn" onClick={() => setShowStickyNotes(false)}>×</button>
+                        </div>
+                        <div className="sticky-notes-content">
+                            {/* Subject Chips */}
+                            <div className="sticky-subject-chips">
+                                {studyPlan.subjects && studyPlan.subjects.map((subject, idx) => {
+                                    const noteKey = getStickyNoteKey(subject);
+                                    const hasNote = !!stickyNotes[noteKey];
+                                    return (
+                                        <button
+                                            key={idx}
+                                            className={`sticky-chip ${stickySelectedSubject === idx ? 'active' : ''} ${hasNote ? 'has-note' : ''}`}
+                                            onClick={() => {
+                                                setStickySelectedSubject(idx);
+                                                const key = getStickyNoteKey(subject);
+                                                setStickyNoteText(stickyNotes[key] || '');
+                                            }}
+                                        >
+                                            {subject.name}
+                                            {hasNote && <span className="sticky-chip-dot">•</span>}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Note Editor */}
+                            {stickySelectedSubject !== null && (() => {
+                                const subject = studyPlan.subjects[stickySelectedSubject];
+                                const noteKey = getStickyNoteKey(subject);
+                                return (
+                                    <div className="sticky-note-editor">
+                                        <div className="sticky-editor-header">
+                                            <h3>{subject.name}</h3>
+                                            <span className="sticky-char-count">{stickyNoteText.length}/500</span>
+                                        </div>
+                                        {subject.topics && subject.topics.length > 0 && (
+                                            <p className="sticky-topics">Topics: {subject.topics.join(', ')}</p>
+                                        )}
+                                        <textarea
+                                            className="sticky-textarea"
+                                            placeholder="Write your short notes here..."
+                                            value={stickyNoteText}
+                                            onChange={(e) => {
+                                                if (e.target.value.length <= 500) setStickyNoteText(e.target.value);
+                                            }}
+                                            rows={5}
+                                        />
+                                        <div className="sticky-editor-actions">
+                                            {stickyNotes[noteKey] && (
+                                                <button
+                                                    className="sticky-delete-btn"
+                                                    onClick={() => {
+                                                        const updated = { ...stickyNotes };
+                                                        delete updated[noteKey];
+                                                        setStickyNotes(updated);
+                                                        localStorage.setItem('stickyNotes', JSON.stringify(updated));
+                                                        setStickyNoteText('');
+                                                    }}
+                                                >
+                                                    🗑️ Delete Note
+                                                </button>
+                                            )}
+                                            <button
+                                                className="sticky-save-btn"
+                                                disabled={!stickyNoteText.trim()}
+                                                onClick={() => {
+                                                    const updated = { ...stickyNotes, [noteKey]: stickyNoteText.trim() };
+                                                    setStickyNotes(updated);
+                                                    localStorage.setItem('stickyNotes', JSON.stringify(updated));
+                                                }}
+                                            >
+                                                💾 Save Note
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {stickySelectedSubject === null && (
+                                <div className="sticky-empty-state">
+                                    <span className="sticky-empty-icon">📝</span>
+                                    <p>Select a subject above to view or add notes</p>
+                                </div>
+                            )}
+
+                            {/* Saved Notes Summary */}
+                            {(() => {
+                                const currentKeys = (studyPlan.subjects || []).map(s => getStickyNoteKey(s));
+                                const relevantNotes = Object.entries(stickyNotes).filter(([key]) => currentKeys.includes(key));
+                                if (relevantNotes.length === 0) return null;
+                                return (
+                                    <div className="sticky-saved-section">
+                                        <h4>📋 Your Notes ({relevantNotes.length})</h4>
+                                        <div className="sticky-saved-list">
+                                            {relevantNotes.map(([key, text]) => {
+                                                const [subjectName] = key.split('|');
+                                                return (
+                                                    <div key={key} className="sticky-saved-card">
+                                                        <div className="sticky-saved-header">
+                                                            <span className="sticky-saved-subject">{subjectName}</span>
+                                                            <button
+                                                                className="sticky-saved-delete"
+                                                                onClick={() => {
+                                                                    const updated = { ...stickyNotes };
+                                                                    delete updated[key];
+                                                                    setStickyNotes(updated);
+                                                                    localStorage.setItem('stickyNotes', JSON.stringify(updated));
+                                                                    if (studyPlan.subjects[stickySelectedSubject] &&
+                                                                        getStickyNoteKey(studyPlan.subjects[stickySelectedSubject]) === key) {
+                                                                        setStickyNoteText('');
+                                                                    }
+                                                                }}
+                                                                title="Delete note"
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        </div>
+                                                        <p className="sticky-saved-text">{text}</p>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </div>
                     </div>
                 </div>
