@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { auth } from '../../config/firebase';
 import { searchSubjects, getTopicsForSubject, getSubjectWeight, calculateStudyTime } from '../../data/subjectsData';
-import { saveStudyPlan, addXpPoints, archiveCurrentPlan, getPlanHistory, restorePlan, unlockAchievement } from '../../services/firestoreService';
+import { saveStudyPlan, addXpPoints, archiveCurrentPlan, getPlanHistory, restorePlan, unlockAchievement, deletePlanFromHistory } from '../../services/firestoreService';
+import { useLanguage } from '../../i18n/LanguageContext';
+import Sidebar from '../common/Sidebar';
 import schedulerLogo from '../../assets/scheduler-logo.png';
 import './Scheduling.css';
 
 const Scheduling = () => {
     const navigate = useNavigate();
+    const { t } = useLanguage();
     const [currentStep, setCurrentStep] = useState(1);
-    const [activeNav, setActiveNav] = useState('schedule');
     const user = auth.currentUser;
 
     // Subjects with individual data - each subject has its own exam date, level, and topics
@@ -85,23 +87,57 @@ const Scheduling = () => {
         setLoadingHistory(false);
     };
 
+    // Preload plan history in background for faster modal display
+    useEffect(() => {
+        if (auth.currentUser) {
+            loadPlanHistory();
+        }
+    }, []);
+
     // Handle restore plan
     const handleRestorePlan = async (plan) => {
         if (!auth.currentUser) return;
-        try {
-            const result = await restorePlan(auth.currentUser.uid, plan);
-            if (result.success) {
-                // Update local state
-                setSubjects(plan.subjects || []);
-                setPreferences(plan.preferences || preferences);
-                setGoals(plan.goals || goals);
-                setShowHistoryModal(false);
 
-                // Navigate to study plan to see restored plan
-                navigate('/study-plan');
+        // Strip archive fields
+        const { archivedAt, archiveId, id, ...cleanPlan } = plan;
+
+        // Optimistic: update localStorage and navigate immediately
+        localStorage.setItem('studyPlan', JSON.stringify(cleanPlan));
+        setShowHistoryModal(false);
+        navigate('/study-plan');
+
+        // Push to Firestore in background
+        restorePlan(auth.currentUser.uid, plan)
+            .then(() => {
+                localStorage.removeItem('planHistory');
+                loadPlanHistory();
+            })
+            .catch(error => {
+                console.error('Error restoring plan to Firestore:', error);
+            });
+    };
+
+    // Delete a plan from history
+    const handleDeletePlan = async (plan) => {
+        if (!auth.currentUser) return;
+        if (!window.confirm('Are you sure you want to delete this plan from history?')) return;
+
+        const planArchiveId = plan.archiveId || plan.id;
+
+        // Optimistic UI update — remove immediately
+        const updatedHistory = planHistory.filter(p => (p.archiveId || p.id) !== planArchiveId);
+        setPlanHistory(updatedHistory);
+        localStorage.setItem('planHistory', JSON.stringify(updatedHistory));
+
+        // Firestore delete in background
+        try {
+            if (planArchiveId) {
+                await deletePlanFromHistory(auth.currentUser.uid, planArchiveId);
             }
         } catch (error) {
-            console.error('Error restoring plan:', error);
+            console.error('Error deleting plan:', error);
+            // If Firestore delete failed, refresh from server to stay in sync
+            loadPlanHistory();
         }
     };
 
@@ -257,6 +293,24 @@ const Scheduling = () => {
             createdAt: new Date().toISOString()
         };
 
+        // Archive any existing plan to localStorage history before overwriting
+        const existingPlanJSON = localStorage.getItem('studyPlan');
+        if (existingPlanJSON) {
+            try {
+                const existingPlan = JSON.parse(existingPlanJSON);
+                const historyJSON = localStorage.getItem('planHistory');
+                const history = historyJSON ? JSON.parse(historyJSON) : [];
+                history.unshift({
+                    ...existingPlan,
+                    id: Date.now().toString(),
+                    archivedAt: new Date().toISOString()
+                });
+                localStorage.setItem('planHistory', JSON.stringify(history));
+            } catch (e) {
+                console.error('Error archiving existing plan:', e);
+            }
+        }
+
         // Save to localStorage first (synchronous, immediate)
         localStorage.setItem('studyPlan', JSON.stringify(studyPlan));
 
@@ -267,10 +321,7 @@ const Scheduling = () => {
         if (auth.currentUser) {
             (async () => {
                 try {
-                    // Archive current plan before saving new one (preserves history)
-                    await archiveCurrentPlan(auth.currentUser.uid);
-
-                    // Save the new plan
+                    // Save the new plan to Firestore
                     await saveStudyPlan(auth.currentUser.uid, studyPlan);
 
                     // Award XP for creating a study plan
@@ -318,96 +369,7 @@ const Scheduling = () => {
     return (
         <div className="scheduling-container">
             {/* Sidebar */}
-            <aside className="sidebar">
-                <div className="sidebar-logo">
-                    <img src={schedulerLogo} alt="Scheduler" className="sidebar-logo-img" />
-                </div>
-
-                <nav className="sidebar-nav">
-                    <button
-                        className={`nav-item ${activeNav === 'home' ? 'active' : ''}`}
-                        onClick={() => navigate('/dashboard')}
-                        title="Dashboard"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                            <polyline points="9,22 9,12 15,12 15,22" />
-                        </svg>
-                    </button>
-                    <button
-                        className={`nav-item ${activeNav === 'schedule' ? 'active' : ''}`}
-                        title="Study Plan"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                            <polyline points="14,2 14,8 20,8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                        </svg>
-                    </button>
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/analytics')}
-                        title="Analytics"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="20" x2="18" y2="10" />
-                            <line x1="12" y1="20" x2="12" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="14" />
-                        </svg>
-                    </button>
-                    {/* Calendar */}
-                    <button
-                        className="nav-item"
-                        title="Calendar"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                    </button>
-
-                    {/* Gamification - Trophy */}
-                    <button
-                        className="nav-item"
-                        title="Gamification"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
-                            <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
-                            <path d="M4 22h16" />
-                            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                            <path d="M18 2H6v7a6 6 0 0012 0V2z" />
-                        </svg>
-                    </button>
-
-                    {/* AI Assistant - Brain Icon */}
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/ai-assistant')}
-                        title="AI Assistant"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44A2.5 2.5 0 015.5 17a2.5 2.5 0 01-1.94-4.06A2.5 2.5 0 015.5 9a2.5 2.5 0 011.5-4.56A2.5 2.5 0 019.5 2z" />
-                            <path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44A2.5 2.5 0 0018.5 17a2.5 2.5 0 001.94-4.06A2.5 2.5 0 0018.5 9a2.5 2.5 0 00-1.5-4.56A2.5 2.5 0 0014.5 2z" />
-                        </svg>
-                    </button>
-
-                    {/* Settings */}
-                    <button
-                        className="nav-item"
-                        title="Settings"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-                        </svg>
-                    </button>
-                </nav>
-            </aside>
+            <Sidebar activeNav="schedule" />
 
             {/* Main Content */}
             <main className="scheduling-main">
@@ -440,7 +402,7 @@ const Scheduling = () => {
                         </svg>
                         AI-Powered Study Planning
                     </div>
-                    <h1>Generate Your Perfect Study Plan</h1>
+                    <h1>{t('scheduling_title')}</h1>
                     <p>Let AI create a personalized study schedule tailored to your goals, timeline, and learning style</p>
                 </section>
 
@@ -561,6 +523,7 @@ const Scheduling = () => {
                                                 <div className="date-input-wrapper">
                                                     <input
                                                         type="date"
+                                                        min={new Date().toISOString().split('T')[0]}
                                                         value={currentSubject.examDate}
                                                         onChange={(e) => setCurrentSubject(prev => ({
                                                             ...prev,
@@ -973,14 +936,14 @@ const Scheduling = () => {
                 <div className="history-modal-overlay" onClick={() => setShowHistoryModal(false)}>
                     <div className="history-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="history-modal-header">
-                            <h2>📚 Study Plan History</h2>
+                            <h2>📚 {t('study_plan_history')}</h2>
                             <button className="close-btn" onClick={() => setShowHistoryModal(false)}>×</button>
                         </div>
                         <div className="history-modal-content">
                             {loadingHistory ? (
                                 <div className="loading-history">
                                     <div className="spinner"></div>
-                                    <p>Loading history...</p>
+                                    <p>{t('common_loading')}</p>
                                 </div>
                             ) : planHistory.length === 0 ? (
                                 <div className="empty-history">
@@ -998,17 +961,25 @@ const Scheduling = () => {
                                                     {plan.subjects?.map(s => s.name).join(', ') || 'No subjects'}
                                                 </p>
                                                 <span className="history-date">
-                                                    Archived: {plan.archivedAt?.toDate ?
-                                                        new Date(plan.archivedAt.toDate()).toLocaleDateString() :
-                                                        plan.createdAt ? new Date(plan.createdAt).toLocaleDateString() : 'Unknown'}
+                                                    Archived: {plan.archivedAt
+                                                        ? new Date(typeof plan.archivedAt === 'string' ? plan.archivedAt : plan.archivedAt?.toDate ? plan.archivedAt.toDate() : plan.archivedAt).toLocaleDateString()
+                                                        : plan.createdAt ? new Date(plan.createdAt).toLocaleDateString() : 'Unknown'}
                                                 </span>
                                             </div>
-                                            <button
-                                                className="restore-btn"
-                                                onClick={() => handleRestorePlan(plan)}
-                                            >
-                                                Restore
-                                            </button>
+                                            <div className="history-item-actions">
+                                                <button
+                                                    className="restore-btn"
+                                                    onClick={() => handleRestorePlan(plan)}
+                                                >
+                                                    Restore
+                                                </button>
+                                                <button
+                                                    className="delete-history-btn"
+                                                    onClick={() => handleDeletePlan(plan)}
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
