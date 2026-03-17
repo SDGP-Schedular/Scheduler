@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Sidebar from '../common/Sidebar';
 import { auth } from '../../config/firebase';
 import { getStudyPlan, getProgress } from '../../services/firestoreService';
-import schedulerLogo from '../../assets/scheduler-logo.png';
+import { useLanguage } from '../../i18n/LanguageContext';
 import './Analytics.css';
 
 const Analytics = () => {
     const navigate = useNavigate();
-    const [activeNav, setActiveNav] = useState('stats');
+    const { t } = useLanguage();
     const [viewType, setViewType] = useState('weekly'); // 'weekly' or 'monthly'
     const [studyPlan, setStudyPlan] = useState(null);
     const [progress, setProgress] = useState(null);
@@ -143,6 +144,10 @@ const Analytics = () => {
         }
 
         return badges;
+    };
+
+    const handleViewDetails = () => {
+        alert("Detailed subject breakdown is coming soon! Check the current metrics for now.");
     };
 
     // Export report
@@ -458,7 +463,7 @@ const Analytics = () => {
             <div className="analytics-container">
                 <div className="loading-state">
                     <div className="loading-spinner"></div>
-                    <p>Loading analytics...</p>
+                    <p>{t('common_loading')}</p>
                 </div>
             </div>
         );
@@ -467,120 +472,15 @@ const Analytics = () => {
     return (
         <div className="analytics-container">
             {/* Sidebar */}
-            <aside className="sidebar">
-                <div className="sidebar-logo">
-                    <img src={schedulerLogo} alt="Scheduler" className="sidebar-logo-img" />
-                </div>
-
-                <nav className="sidebar-nav">
-                    {/* Home/Dashboard */}
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/dashboard')}
-                        title="Dashboard"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                            <polyline points="9,22 9,12 15,12 15,22" />
-                        </svg>
-                    </button>
-
-                    {/* Study Plan */}
-                    <button
-                        className="nav-item"
-                        onClick={() => {
-                            const plan = localStorage.getItem('studyPlan');
-                            navigate(plan ? '/study-plan' : '/scheduling');
-                        }}
-                        title="Study Plan"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                            <polyline points="14,2 14,8 20,8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                        </svg>
-                    </button>
-
-                    {/* Analytics */}
-                    <button
-                        className="nav-item active"
-                        title="Analytics"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="20" x2="18" y2="10" />
-                            <line x1="12" y1="20" x2="12" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="14" />
-                        </svg>
-                    </button>
-
-                    {/* Calendar */}
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/calendar')}
-                        title="Calendar"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                    </button>
-
-                    {/* Gamification - Trophy Icon */}
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/dashboard')}
-                        title="Gamification"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
-                            <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
-                            <path d="M4 22h16" />
-                            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                            <path d="M18 2H6v7a6 6 0 0012 0V2z" />
-                        </svg>
-                    </button>
-
-                    {/* AI Assistant - Brain Icon */}
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/ai-assistant')}
-                        title="AI Assistant"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44A2.5 2.5 0 015.5 17a2.5 2.5 0 01-1.94-4.06A2.5 2.5 0 015.5 9a2.5 2.5 0 011.5-4.56A2.5 2.5 0 019.5 2z" />
-                            <path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44A2.5 2.5 0 0018.5 17a2.5 2.5 0 001.94-4.06A2.5 2.5 0 0018.5 9a2.5 2.5 0 00-1.5-4.56A2.5 2.5 0 0014.5 2z" />
-                        </svg>
-                    </button>
-
-                    {/* Settings */}
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/dashboard')}
-                        title="Settings"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-                        </svg>
-                    </button>
-                </nav>
-
-                <div className="sidebar-bottom">
-                    <div className="user-avatar">U</div>
-                </div>
-            </aside>
+            <Sidebar activeNav="analytics" />
 
             {/* Main Content */}
             <main className="analytics-main" ref={contentRef}>
                 {/* Header */}
                 <header className="analytics-header">
                     <div className="header-left">
-                        <h1>Performance Analytics</h1>
-                        <p>Track your study progress and performance metrics</p>
+                        <h1>{t('analytics_title')}</h1>
+                        <p>{t('analytics_subtitle')}</p>
                     </div>
                     <div className="header-right">
                         {/* View Toggle */}
@@ -617,7 +517,7 @@ const Analytics = () => {
                                 <polyline points="7 10 12 15 17 10" />
                                 <line x1="12" y1="15" x2="12" y2="3" />
                             </svg>
-                            Export PDF
+                            {t('analytics_export')}
                         </button>
                     </div>
                 </header>
@@ -626,10 +526,10 @@ const Analytics = () => {
                     /* Empty State */
                     <div className="empty-state">
                         <div className="empty-icon">📊</div>
-                        <h2>No Analytics Yet</h2>
-                        <p>Create a study plan to start tracking your progress and see detailed analytics</p>
+                        <h2>{t('analytics_title')}</h2>
+                        <p>{t('analytics_subtitle')}</p>
                         <button className="create-plan-btn" onClick={() => navigate('/scheduling')}>
-                            Create Study Plan
+                            {t('study_plan_create')}
                         </button>
                     </div>
                 ) : (
@@ -644,9 +544,9 @@ const Analytics = () => {
                                     </svg>
                                 </div>
                                 <div className="stat-info">
-                                    <span className="stat-label">Total Study Hours</span>
+                                    <span className="stat-label">{t('analytics_total_hours')}</span>
                                     <span className="stat-value">{analytics?.totalHours || 0}h</span>
-                                    <span className="stat-period">{viewType === 'weekly' ? 'This week' : 'This month'}</span>
+                                    <span className="stat-period">{viewType === 'weekly' ? t('analytics_this_week') : t('analytics_this_month')}</span>
                                 </div>
                                 <span className="stat-badge green">+12%</span>
                             </div>
@@ -659,7 +559,7 @@ const Analytics = () => {
                                     </svg>
                                 </div>
                                 <div className="stat-info">
-                                    <span className="stat-label">Completion Rate</span>
+                                    <span className="stat-label">{t('analytics_performance')}</span>
                                     <span className="stat-value">{analytics?.completionRate || 0}%</span>
                                     <span className="stat-period">Tasks completed</span>
                                 </div>
@@ -673,7 +573,7 @@ const Analytics = () => {
                                     </svg>
                                 </div>
                                 <div className="stat-info">
-                                    <span className="stat-label">Consistency Score</span>
+                                    <span className="stat-label">{t('analytics_subjects')}</span>
                                     <span className="stat-value">{analytics?.consistencyScore || 0}</span>
                                     <span className="stat-period">Out of 100</span>
                                 </div>
@@ -689,7 +589,7 @@ const Analytics = () => {
                                     </svg>
                                 </div>
                                 <div className="stat-info">
-                                    <span className="stat-label">Average Score</span>
+                                    <span className="stat-label">{t('dashboard_avg_score')}</span>
                                     <span className="stat-value">{analytics?.averageScore || 0}%</span>
                                     <span className="stat-period">Across subjects</span>
                                 </div>
@@ -791,7 +691,7 @@ const Analytics = () => {
                                 <div className="chart-header">
                                     <h3>Subject-wise Performance</h3>
                                     <span className="chart-subtitle">Average scores by subject</span>
-                                    <button className="view-details-btn">View Details</button>
+                                    <button className="view-details-btn" onClick={handleViewDetails}>{t('dashboard_view_all')}</button>
                                 </div>
                                 <div className="subject-bars">
                                     {subjectData.slice(0, 5).map((subject, index) => (
@@ -837,7 +737,7 @@ const Analytics = () => {
                                         })}
                                         <div className="pie-center">
                                             <span className="pie-total">{studyPlan?.subjects?.length || 0}</span>
-                                            <span className="pie-label">Subjects</span>
+                                            <span className="pie-label">{t('analytics_subjects')}</span>
                                         </div>
                                     </div>
                                     <div className="pie-legend">

@@ -1,14 +1,19 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import Sidebar from '../common/Sidebar';
 import { auth } from '../../config/firebase';
 import { getStudyPlan, getProgress, getAchievements } from '../../services/firestoreService';
+import { checkAiQuizLimit } from '../../services/quizService';
 import { subjectsData } from '../../data/subjectsData';
+import { grades, getSubjectsForGrade, getTopicsForSubject } from '../../data/gradesData';
+import { useLanguage } from '../../i18n/LanguageContext';
 import schedulerLogo from '../../assets/scheduler-logo.png';
 import './Gamification.css';
 
 const Gamification = () => {
     const navigate = useNavigate();
-    const [activeNav, setActiveNav] = useState('gamification');
+    const location = useLocation();
+    const { t } = useLanguage();
     const [studyPlan, setStudyPlan] = useState(null);
     const [progress, setProgress] = useState({ xpPoints: 0, studyStreak: 0, completedSessions: 0 });
     const [achievements, setAchievements] = useState([]);
@@ -16,6 +21,20 @@ const Gamification = () => {
     const [showManualSelect, setShowManualSelect] = useState(false);
     const [manualSubjects, setManualSubjects] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [showAllAchievements, setShowAllAchievements] = useState(false);
+
+    // Quiz configuration state
+    const [selectedGrade, setSelectedGrade] = useState('');
+    const [selectedTopic, setSelectedTopic] = useState('');
+    const [numQuestions, setNumQuestions] = useState(10);
+    const [quizTime, setQuizTime] = useState(10);
+    const [difficulty, setDifficulty] = useState('Mixed');
+    const [availableSubjects, setAvailableSubjects] = useState([]);
+    const [availableTopics, setAvailableTopics] = useState([]);
+
+    // AI Quiz limit state
+    const [aiQuizLimit, setAiQuizLimit] = useState({ used: 0, limit: 3, remaining: 3, resetsAt: null });
+    const [aiCountdown, setAiCountdown] = useState('');
 
     // Level thresholds and titles
     const levelThresholds = [
@@ -32,17 +51,74 @@ const Gamification = () => {
     // All available subjects for manual selection
     const allSubjects = Object.keys(subjectsData);
 
-    // Badge collection
-    const allBadges = [
-        { id: 'champion', name: 'Champion', icon: '🏆', unlocked: false },
-        { id: 'rising_star', name: 'Rising Star', icon: '⭐', unlocked: false },
-        { id: 'quiz_champ', name: 'Quiz Champ', icon: '🎯', unlocked: false },
-        { id: 'early_bird', name: 'Early Bird', icon: '🌅', unlocked: false },
-        { id: 'consistency', name: 'Consistent', icon: '📊', unlocked: false },
-        { id: 'daily_grinder', name: 'Daily Grinder', icon: '💪', unlocked: false },
-        { id: 'achiever', name: 'Achiever', icon: '✅', unlocked: false },
-        { id: 'speed_demon', name: 'Speed Demon', icon: '⚡', unlocked: false },
+    // Badge collection — all 25 achievable badges organized by category
+    const badgeCategories = [
+        {
+            name: 'Completion Milestones',
+            icon: '🎯',
+            badges: [
+                { id: 'first_steps', name: 'First Steps', icon: '🎯', description: 'Complete your first quiz' },
+                { id: 'dedicated_learner', name: 'Dedicated Learner', icon: '📚', description: 'Complete 5 quizzes' },
+                { id: 'quiz_enthusiast', name: 'Quiz Enthusiast', icon: '⭐', description: 'Complete 10 quizzes' },
+                { id: 'quiz_master', name: 'Quiz Master', icon: '🏆', description: 'Complete 25 quizzes' },
+                { id: 'quiz_legend', name: 'Quiz Legend', icon: '👑', description: 'Complete 50 quizzes' },
+                { id: 'quiz_deity', name: 'Quiz Deity', icon: '🌟', description: 'Complete 100 quizzes' },
+            ]
+        },
+        {
+            name: 'Performance',
+            icon: '🏆',
+            badges: [
+                { id: 'rising_star', name: 'Rising Star', icon: '⭐', description: 'Score 80%+ on a quiz' },
+                { id: 'champion', name: 'Champion', icon: '🏆', description: 'Score 100% on a quiz' },
+                { id: 'hard_mode_hero', name: 'Hard Mode Hero', icon: '🛡️', description: 'Score 80%+ on Hard difficulty' },
+                { id: 'no_mistakes', name: 'No Mistakes', icon: '✨', description: 'Perfect score on 20+ questions' },
+            ]
+        },
+        {
+            name: 'Speed',
+            icon: '⚡',
+            badges: [
+                { id: 'speed_demon', name: 'Speed Demon', icon: '⚡', description: 'Perfect score in <50% time' },
+                { id: 'lightning_fast', name: 'Lightning Fast', icon: '⚡️', description: 'Perfect score in <30% time' },
+                { id: 'flash', name: 'Flash', icon: '💫', description: 'Perfect score in <25% time' },
+                { id: 'unbeatable', name: 'Unbeatable', icon: '🚀', description: 'Perfect Hard quiz in <50% time' },
+                { id: 'speedrunner', name: 'Speedrunner', icon: '🏃', description: 'Perfect 20+ questions in <40% time' },
+            ]
+        },
+        {
+            name: 'Subject Mastery',
+            icon: '🧙',
+            badges: [
+                { id: 'math_wizard', name: 'Math Wizard', icon: '🧙‍♂️', description: 'Score 90%+ in Mathematics' },
+                { id: 'science_genius', name: 'Science Genius', icon: '🔬', description: 'Score 90%+ in Science/Physics/Chemistry' },
+                { id: 'language_expert', name: 'Language Expert', icon: '📖', description: 'Score 90%+ in a language subject' },
+                { id: 'tech_savvy', name: 'Tech Savvy', icon: '💻', description: 'Score 90%+ in ICT/Programming' },
+                { id: 'history_buff', name: 'History Buff', icon: '📜', description: 'Score 90%+ in History' },
+                { id: 'commerce_pro', name: 'Commerce Pro', icon: '💼', description: 'Score 90%+ in Commerce/Accounting/Economics' },
+            ]
+        },
+        {
+            name: 'Challenges',
+            icon: '🎮',
+            badges: [
+                { id: 'night_owl', name: 'Night Owl', icon: '🦉', description: 'Complete a quiz after 10 PM' },
+                { id: 'early_bird', name: 'Early Bird', icon: '🌅', description: 'Complete a quiz before 7 AM' },
+                { id: 'marathon_runner', name: 'Marathon Runner', icon: '🏃‍♂️', description: 'Score 85%+ on 30+ questions' },
+            ]
+        },
+        {
+            name: 'Study Plan',
+            icon: '📋',
+            badges: [
+                { id: 'first_plan', name: 'First Plan', icon: '📋', description: 'Create your first study plan' },
+                { id: 'multi_subject', name: 'Multi-Tasker', icon: '🎯', description: 'Add 3+ subjects to a plan' },
+            ]
+        }
     ];
+
+    // Flatten all badges for backward compatibility
+    const allBadges = badgeCategories.flatMap(cat => cat.badges);
 
     // Subject icons mapping
     const subjectIcons = {
@@ -77,11 +153,19 @@ const Gamification = () => {
         'default': { bg: '#F3F4F6', color: '#6B7280' }
     };
 
+    // Auto-adjust quiz time when question count changes
+    useEffect(() => {
+        const minTime = Math.max(1, numQuestions);
+        const maxTime = numQuestions * 3;
+        if (quizTime < minTime) setQuizTime(minTime);
+        else if (quizTime > maxTime) setQuizTime(maxTime);
+    }, [numQuestions]);
+
     useEffect(() => {
         const loadData = async () => {
             setIsLoading(true);
 
-            // Load from localStorage first
+            // 1. INSTANT: Load from localStorage cache first
             const cachedPlan = localStorage.getItem('studyPlan');
             if (cachedPlan) {
                 try {
@@ -91,7 +175,25 @@ const Gamification = () => {
                 }
             }
 
-            // Load from Firestore
+            const cachedProgress = localStorage.getItem('gamificationProgress');
+            if (cachedProgress) {
+                try {
+                    setProgress(JSON.parse(cachedProgress));
+                } catch (e) {
+                    console.error('Error parsing cached progress:', e);
+                }
+            }
+
+            const cachedAchievements = localStorage.getItem('gamificationAchievements');
+            if (cachedAchievements) {
+                try {
+                    setAchievements(JSON.parse(cachedAchievements));
+                } catch (e) {
+                    console.error('Error parsing cached achievements:', e);
+                }
+            }
+
+            // 2. BACKGROUND: Fetch latest from Firestore and update
             if (auth.currentUser) {
                 try {
                     const [planResult, progressResult, achievementsResult] = await Promise.all([
@@ -104,10 +206,34 @@ const Gamification = () => {
                         setStudyPlan(planResult.data);
                     }
                     if (progressResult.success && progressResult.data) {
-                        setProgress(progressResult.data);
+                        // Always write Firestore data to cache, merging with highest values
+                        setProgress(prev => {
+                            const fsData = progressResult.data;
+                            const merged = {
+                                ...prev,
+                                ...fsData,
+                                xpPoints: Math.max(prev.xpPoints || 0, fsData.xpPoints || 0),
+                                studyStreak: Math.max(prev.studyStreak || 0, fsData.studyStreak || 0),
+                                completedSessions: Math.max(prev.completedSessions || 0, fsData.completedSessions || 0)
+                            };
+                            localStorage.setItem('gamificationProgress', JSON.stringify(merged));
+                            return merged;
+                        });
                     }
-                    if (achievementsResult.success && achievementsResult.data) {
-                        setAchievements(achievementsResult.data);
+                    if (achievementsResult.success) {
+                        // Always update achievements — merge Firestore with existing cache
+                        setAchievements(prev => {
+                            const fsAchievements = achievementsResult.data || [];
+                            if (fsAchievements.length === 0 && prev.length === 0) {
+                                localStorage.setItem('gamificationAchievements', '[]');
+                                return prev;
+                            }
+                            const existingIds = new Set(prev.map(a => a.id || a.badge || a.type));
+                            const newFromFirestore = fsAchievements.filter(a => !existingIds.has(a.id || a.badge || a.type));
+                            const merged = [...prev, ...newFromFirestore];
+                            localStorage.setItem('gamificationAchievements', JSON.stringify(merged));
+                            return merged;
+                        });
                     }
                 } catch (error) {
                     console.error('Error loading data:', error);
@@ -118,7 +244,7 @@ const Gamification = () => {
         };
 
         loadData();
-    }, []);
+    }, [location.key]);
 
     // Calculate current level from XP
     const getCurrentLevel = () => {
@@ -166,34 +292,160 @@ const Gamification = () => {
         return [];
     };
 
-    // Handle subject selection for quiz
+    // Handle grade selection
+    const handleGradeChange = (grade) => {
+        setSelectedGrade(grade);
+        setSelectedSubject(null);
+        setSelectedTopic('');
+
+        if (grade) {
+            const subjects = getSubjectsForGrade(grade, subjectsData);
+            setAvailableSubjects(subjects);
+        } else {
+            setAvailableSubjects([]);
+        }
+        setAvailableTopics([]);
+    };
+
+    // Handle subject selection for quiz (for both plan and manual selection)
     const handleSubjectSelect = (subject) => {
         setSelectedSubject(subject);
+        setSelectedTopic('');
+
+        // Load topics for this subject
+        const topics = getTopicsForSubject(subject, subjectsData);
+        setAvailableTopics(topics);
     };
 
-    // Handle starting quiz
-    const handleEnterQuiz = () => {
-        if (selectedSubject) {
-            navigate(`/quiz?subject=${encodeURIComponent(selectedSubject)}`);
+    // Handle topic selection
+    const handleTopicChange = (topic) => {
+        setSelectedTopic(topic);
+    };
+
+    // Fetch AI quiz limit on mount AND when returning from a quiz
+    useEffect(() => {
+        const fetchLimit = async () => {
+            try {
+                const limitData = await checkAiQuizLimit();
+                setAiQuizLimit(limitData);
+            } catch (err) {
+                console.warn('Could not fetch AI quiz limit:', err);
+            }
+        };
+        if (auth.currentUser) {
+            fetchLimit();
+        } else {
+            const unsubscribe = auth.onAuthStateChanged((user) => {
+                if (user) fetchLimit();
+            });
+            return () => unsubscribe();
         }
+    }, [location.key]);
+
+    // Countdown timer for AI quiz reset
+    useEffect(() => {
+        if (!aiQuizLimit.resetsAt || aiQuizLimit.remaining > 0) {
+            setAiCountdown('');
+            return;
+        }
+
+        const updateCountdown = () => {
+            const now = new Date();
+            const reset = new Date(aiQuizLimit.resetsAt);
+            const diff = reset - now;
+
+            if (diff <= 0) {
+                setAiCountdown('Available now!');
+                return;
+            }
+
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            setAiCountdown(`Resets in ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`);
+        };
+
+        updateCountdown();
+        const interval = setInterval(updateCountdown, 1000);
+        return () => clearInterval(interval);
+    }, [aiQuizLimit.resetsAt, aiQuizLimit.remaining]);
+
+    // Validate quiz config before starting
+    const validateQuizConfig = () => {
+        if (!selectedSubject) {
+            alert('Please select a subject to start the quiz.');
+            return false;
+        }
+        if (!hasPlan) {
+            if (!selectedGrade) {
+                alert('Please select your grade level.');
+                return false;
+            }
+            if (!selectedTopic) {
+                alert('Please select a topic.');
+                return false;
+            }
+        }
+        return true;
     };
 
-    // Toggle manual subject selection
-    const handleManualSubjectToggle = (subject) => {
-        setManualSubjects(prev =>
-            prev.includes(subject)
-                ? prev.filter(s => s !== subject)
-                : [...prev, subject]
-        );
+    // Handle starting AI Quiz
+    const handleStartAiQuiz = () => {
+        if (!validateQuizConfig()) return;
+        navigate('/quiz', {
+            state: {
+                grade: selectedGrade || studyPlan?.grade || '10',
+                subject: selectedSubject,
+                topic: selectedTopic,
+                numQuestions,
+                time: quizTime,
+                difficulty,
+                source: 'ai'
+            }
+        });
     };
 
-    // Get badges with unlock status
+    // Handle starting Question Bank Quiz
+    const handleStartBankQuiz = () => {
+        if (!validateQuizConfig()) return;
+        navigate('/quiz', {
+            state: {
+                grade: selectedGrade || studyPlan?.grade || '10',
+                subject: selectedSubject,
+                topic: selectedTopic,
+                numQuestions,
+                time: quizTime,
+                difficulty,
+                source: 'bank'
+            }
+        });
+    };
+
+
+    // Get badges with unlock status — matches against both badge id and achievement type
     const getBadges = () => {
-        const unlockedIds = achievements.map(a => a.id);
+        const unlockedIds = achievements.map(a => a.id || a.type || a.badge);
         return allBadges.map(badge => ({
             ...badge,
             unlocked: unlockedIds.includes(badge.id)
         }));
+    };
+
+    // Get categorized badges with unlock status for the modal
+    const getCategorizedBadges = () => {
+        const unlockedIds = achievements.map(a => a.id || a.type || a.badge);
+        return badgeCategories.map(category => ({
+            ...category,
+            badges: category.badges.map(badge => ({
+                ...badge,
+                unlocked: unlockedIds.includes(badge.id)
+            })),
+            unlockedCount: category.badges.filter(b => unlockedIds.includes(b.id)).length
+        }));
+    };
+
+    const handleViewAllAchievements = () => {
+        setShowAllAchievements(true);
     };
 
     const currentLevel = getCurrentLevel();
@@ -206,104 +458,7 @@ const Gamification = () => {
     return (
         <div className="gamification-container">
             {/* Sidebar */}
-            <aside className="sidebar">
-                <div className="sidebar-logo">
-                    <img src={schedulerLogo} alt="Scheduler" className="sidebar-logo-img" />
-                </div>
-
-                <nav className="sidebar-nav">
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/dashboard')}
-                        title="Dashboard"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                            <polyline points="9,22 9,12 15,12 15,22" />
-                        </svg>
-                    </button>
-
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate(hasPlan ? '/study-plan' : '/scheduling')}
-                        title="Study Plan"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-                            <polyline points="14,2 14,8 20,8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                        </svg>
-                    </button>
-
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/analytics')}
-                        title="Analytics"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="20" x2="18" y2="10" />
-                            <line x1="12" y1="20" x2="12" y2="4" />
-                            <line x1="6" y1="20" x2="6" y2="14" />
-                        </svg>
-                    </button>
-
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/calendar')}
-                        title="Calendar"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                    </button>
-
-                    <button
-                        className="nav-item active"
-                        title="Gamification"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
-                            <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
-                            <path d="M4 22h16" />
-                            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-                            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-                            <path d="M18 2H6v7a6 6 0 0012 0V2z" />
-                        </svg>
-                    </button>
-
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/ai-assistant')}
-                        title="AI Assistant"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-4.96.44A2.5 2.5 0 015.5 17a2.5 2.5 0 01-1.94-4.06A2.5 2.5 0 015.5 9a2.5 2.5 0 011.5-4.56A2.5 2.5 0 019.5 2z" />
-                            <path d="M14.5 2A2.5 2.5 0 0012 4.5v15a2.5 2.5 0 004.96.44A2.5 2.5 0 0018.5 17a2.5 2.5 0 001.94-4.06A2.5 2.5 0 0018.5 9a2.5 2.5 0 00-1.5-4.56A2.5 2.5 0 0014.5 2z" />
-                        </svg>
-                    </button>
-
-                    <button
-                        className="nav-item"
-                        onClick={() => navigate('/reminder-settings')}
-                        title="Settings"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="3" />
-                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" />
-                        </svg>
-                    </button>
-                </nav>
-
-                <div className="sidebar-bottom">
-                    <div className="user-avatar">
-                        {auth.currentUser?.email?.charAt(0).toUpperCase() || 'U'}
-                    </div>
-                </div>
-            </aside>
+            <Sidebar activeNav="gamification" />
 
             {/* Main Content */}
             <main className="main-content">
@@ -311,10 +466,10 @@ const Gamification = () => {
                 <header className="gamification-header">
                     <div className="header-left">
                         <img src={schedulerLogo} alt="Scheduler" className="header-logo" />
-                        <span className="header-title">Scheduler</span>
+                        <span className="header-title">{t('app_name')}</span>
                     </div>
                     <div className="header-right">
-                        <span className="level-badge">Level {currentLevel.level}</span>
+                        <span className="level-badge">{t('gamification_level')} {currentLevel.level}</span>
                         <div className="user-avatar-small">
                             {auth.currentUser?.email?.charAt(0).toUpperCase() || 'U'}
                         </div>
@@ -327,7 +482,7 @@ const Gamification = () => {
                         {/* Level Progress Card */}
                         <div className="card level-progress-card">
                             <div className="level-progress-header">
-                                <h2>Level Progress</h2>
+                                <h2>{t('gamification_progress')}</h2>
                                 <span className="level-tag">
                                     <span className="star-icon">⭐</span>
                                     Level {currentLevel.level}
@@ -352,58 +507,26 @@ const Gamification = () => {
                             </p>
                         </div>
 
-                        {/* Select Subjects Card */}
+                        {/* Quiz Configuration Card */}
                         <div className="card subjects-card">
-                            <h2>Select Subjects</h2>
+                            <h2>{t('gamification_title')}</h2>
 
                             {hasPlan ? (
-                                <div className="subjects-grid">
-                                    {planSubjects.map((subject, index) => (
-                                        <button
-                                            key={index}
-                                            className={`subject-chip ${selectedSubject === subject ? 'selected' : ''}`}
-                                            onClick={() => handleSubjectSelect(subject)}
-                                            style={{
-                                                backgroundColor: selectedSubject === subject
-                                                    ? (subjectColors[subject]?.color || subjectColors.default.color)
-                                                    : (subjectColors[subject]?.bg || subjectColors.default.bg),
-                                                color: selectedSubject === subject
-                                                    ? '#fff'
-                                                    : (subjectColors[subject]?.color || subjectColors.default.color)
-                                            }}
-                                        >
-                                            <span className="subject-icon">
-                                                {subjectIcons[subject] || subjectIcons.default}
-                                            </span>
-                                            {subject}
-                                        </button>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="no-plan-message">
-                                    <p>No study plan found. Select subjects manually or create a study plan.</p>
-                                    <button
-                                        className="manual-select-btn"
-                                        onClick={() => setShowManualSelect(!showManualSelect)}
-                                    >
-                                        {showManualSelect ? 'Hide Subjects' : 'Select Subjects Manually'}
-                                    </button>
-
-                                    {showManualSelect && (
-                                        <div className="manual-subjects-grid">
-                                            {allSubjects.slice(0, 12).map((subject, index) => (
+                                <>
+                                    {/* For users with study plan - show subject chips */}
+                                    <div className="quiz-config-section">
+                                        <label className="quiz-config-label">Select Subject</label>
+                                        <div className="subjects-grid">
+                                            {planSubjects.map((subject, index) => (
                                                 <button
                                                     key={index}
-                                                    className={`subject-chip ${manualSubjects.includes(subject) ? 'selected' : ''}`}
-                                                    onClick={() => {
-                                                        handleManualSubjectToggle(subject);
-                                                        handleSubjectSelect(subject);
-                                                    }}
+                                                    className={`subject-chip ${selectedSubject === subject ? 'selected' : ''}`}
+                                                    onClick={() => handleSubjectSelect(subject)}
                                                     style={{
-                                                        backgroundColor: manualSubjects.includes(subject)
+                                                        backgroundColor: selectedSubject === subject
                                                             ? (subjectColors[subject]?.color || subjectColors.default.color)
                                                             : (subjectColors[subject]?.bg || subjectColors.default.bg),
-                                                        color: manualSubjects.includes(subject)
+                                                        color: selectedSubject === subject
                                                             ? '#fff'
                                                             : (subjectColors[subject]?.color || subjectColors.default.color)
                                                     }}
@@ -415,24 +538,215 @@ const Gamification = () => {
                                                 </button>
                                             ))}
                                         </div>
+                                    </div>
+
+                                    {/* Topic selection for plan users */}
+                                    {selectedSubject && availableTopics.length > 0 && (
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">Select Topic</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={selectedTopic}
+                                                onChange={(e) => setSelectedTopic(e.target.value)}
+                                            >
+                                                <option value="">All Topics (Mixed)</option>
+                                                {availableTopics.map((topic, index) => (
+                                                    <option key={index} value={topic}>{topic}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     )}
-                                </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* For users without study plan - show dropdowns */}
+                                    <p className="quiz-config-description">
+                                        Select your grade, subject, and topic to start a quiz
+                                    </p>
+
+                                    {/* Grade Selection */}
+                                    <div className="quiz-config-section">
+                                        <label className="quiz-config-label">1. Select Your Grade</label>
+                                        <select
+                                            className="quiz-dropdown"
+                                            value={selectedGrade}
+                                            onChange={(e) => handleGradeChange(e.target.value)}
+                                        >
+                                            <option value="">Choose grade...</option>
+                                            {grades.map((grade) => (
+                                                <option key={grade.id} value={grade.value}>
+                                                    {grade.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Subject Selection */}
+                                    {selectedGrade && (
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">2. Select Subject</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={selectedSubject || ''}
+                                                onChange={(e) => handleSubjectSelect(e.target.value)}
+                                            >
+                                                <option value="">Choose subject...</option>
+                                                {availableSubjects.map((subject, index) => (
+                                                    <option key={index} value={subject.name}>
+                                                        {subject.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+
+                                    {/* Topic Selection */}
+                                    {selectedSubject && availableTopics.length > 0 && (
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">3. Select Topic</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={selectedTopic}
+                                                onChange={(e) => handleTopicChange(e.target.value)}
+                                            >
+                                                <option value="">Choose topic...</option>
+                                                {availableTopics.map((topic, index) => (
+                                                    <option key={index} value={topic}>{topic}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                </>
                             )}
 
-                            <button
-                                className="enter-quiz-btn"
-                                onClick={handleEnterQuiz}
-                                disabled={!selectedSubject}
-                            >
-                                Enter Quiz
-                            </button>
+                            {/* Quiz Settings - shown after subject is selected */}
+                            {selectedSubject && (
+                                <>
+                                    <div className="quiz-settings-divider"></div>
+                                    <h3 className="quiz-settings-title">Quiz Settings</h3>
+
+                                    <div className="quiz-settings-grid">
+                                        {/* Number of Questions */}
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">Number of Questions</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={numQuestions}
+                                                onChange={(e) => setNumQuestions(Number(e.target.value))}
+                                            >
+                                                <option value="5">5 questions</option>
+                                                <option value="10">10 questions</option>
+                                                <option value="15">15 questions</option>
+                                                <option value="20">20 questions</option>
+                                                <option value="25">25 questions</option>
+                                                <option value="30">30 questions</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Time Duration — options scale with question count */}
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">Time Duration</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={quizTime}
+                                                onChange={(e) => setQuizTime(Number(e.target.value))}
+                                            >
+                                                {(() => {
+                                                    // ~1 min per question baseline, offer range from 1x to 3x
+                                                    const minTime = Math.max(1, numQuestions);
+                                                    const maxTime = numQuestions * 3;
+                                                    const allOptions = [1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 45, 60];
+                                                    const validOptions = allOptions.filter(t => t >= minTime && t <= maxTime);
+                                                    // Ensure at least the baseline is available
+                                                    if (!validOptions.includes(minTime)) validOptions.unshift(minTime);
+                                                    return validOptions.map(t => (
+                                                        <option key={t} value={t}>{t} minute{t !== 1 ? 's' : ''}</option>
+                                                    ));
+                                                })()}
+                                            </select>
+                                        </div>
+
+                                        {/* Difficulty Level */}
+                                        <div className="quiz-config-section">
+                                            <label className="quiz-config-label">Difficulty Level</label>
+                                            <select
+                                                className="quiz-dropdown"
+                                                value={difficulty}
+                                                onChange={(e) => setDifficulty(e.target.value)}
+                                            >
+                                                <option value="Easy">Easy</option>
+                                                <option value="Medium">Medium</option>
+                                                <option value="Hard">Hard</option>
+                                                <option value="Mixed">Mixed (All Levels)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* Quiz Type Selection */}
+                            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+                                {/* AI Quiz Button */}
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <button
+                                        className="enter-quiz-btn"
+                                        onClick={handleStartAiQuiz}
+                                        disabled={!selectedSubject || (!hasPlan && (!selectedGrade || !selectedTopic)) || aiQuizLimit.remaining <= 0}
+                                        style={{
+                                            width: '100%',
+                                            background: aiQuizLimit.remaining <= 0
+                                                ? 'linear-gradient(135deg, #374151 0%, #4b5563 100%)'
+                                                : 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                                            opacity: aiQuizLimit.remaining <= 0 ? 0.7 : 1,
+                                            cursor: aiQuizLimit.remaining <= 0 ? 'not-allowed' : 'pointer'
+                                        }}
+                                    >
+                                        🤖 AI Quiz
+                                    </button>
+                                    <div style={{
+                                        fontSize: '0.72rem',
+                                        marginTop: '6px',
+                                        color: aiQuizLimit.remaining <= 0 ? '#f87171' : '#818cf8',
+                                        textAlign: 'center',
+                                        fontWeight: 500
+                                    }}>
+                                        {aiQuizLimit.remaining > 0
+                                            ? `${aiQuizLimit.remaining}/${aiQuizLimit.limit} remaining today`
+                                            : aiCountdown || 'Limit reached'
+                                        }
+                                    </div>
+                                </div>
+
+                                {/* Question Bank Button */}
+                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <button
+                                        className="enter-quiz-btn"
+                                        onClick={handleStartBankQuiz}
+                                        disabled={!selectedSubject || (!hasPlan && (!selectedGrade || !selectedTopic))}
+                                        style={{
+                                            width: '100%',
+                                            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                                        }}
+                                    >
+                                        📚 Question Bank
+                                    </button>
+                                    <div style={{
+                                        fontSize: '0.72rem',
+                                        marginTop: '6px',
+                                        color: '#4ade80',
+                                        textAlign: 'center',
+                                        fontWeight: 500
+                                    }}>
+                                        Unlimited • 450+ questions
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Recent Achievements */}
                         <div className="card achievements-card">
                             <div className="achievements-header">
-                                <h2>Recent Achievements</h2>
-                                <button className="view-all-btn">View All</button>
+                                <h2>{t('gamification_achievements')}</h2>
                             </div>
                             <div className="achievements-grid">
                                 {achievements.length > 0 ? (
@@ -474,28 +788,34 @@ const Gamification = () => {
                             </div>
                         </div>
 
-                        {/* Badge Collection */}
+                        {/* Badge Collection — show first 8 */}
                         <div className="card badges-card">
                             <div className="badges-header">
-                                <h2>Badge Collection</h2>
+                                <h2>{t('gamification_badges')}</h2>
                                 <span className="badges-progress">Progress: {unlockedCount}/{badges.length}</span>
                             </div>
                             <div className="badges-grid">
-                                {badges.map((badge, index) => (
+                                {badges.slice(0, 8).map((badge, index) => (
                                     <div
                                         key={index}
                                         className={`badge-item ${badge.unlocked ? 'unlocked' : 'locked'}`}
+                                        title={badge.description}
                                     >
                                         <div className="badge-icon">{badge.icon}</div>
                                         <span className="badge-name">{badge.name}</span>
                                     </div>
                                 ))}
                             </div>
+                            {badges.length > 8 && (
+                                <button className="view-all-badges-btn" onClick={handleViewAllAchievements}>
+                                    View All {badges.length} Badges →
+                                </button>
+                            )}
                         </div>
 
                         {/* Active Challenges */}
                         <div className="card challenges-card">
-                            <h2>Active Challenges</h2>
+                            <h2>{t('gamification_daily_challenge')}</h2>
                             <div className="challenge-item">
                                 <div className="challenge-info">
                                     <span className="challenge-title">Complete 10 Quizzes</span>
@@ -605,6 +925,71 @@ const Gamification = () => {
                     </div>
                 </div>
             </main>
+
+            {/* All Achievements Modal */}
+            {showAllAchievements && (
+                <div className="achievements-modal-overlay" onClick={() => setShowAllAchievements(false)}>
+                    <div className="achievements-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="achievements-modal-header">
+                            <div>
+                                <h2>🏅 All Achievements</h2>
+                                <p className="achievements-modal-subtitle">
+                                    {unlockedCount} of {badges.length} unlocked
+                                </p>
+                            </div>
+                            <button className="modal-close-btn" onClick={() => setShowAllAchievements(false)}>×</button>
+                        </div>
+
+                        {/* Overall progress bar */}
+                        <div className="achievements-overall-progress">
+                            <div className="achievements-progress-bar">
+                                <div
+                                    className="achievements-progress-fill"
+                                    style={{ width: `${badges.length > 0 ? (unlockedCount / badges.length) * 100 : 0}%` }}
+                                />
+                            </div>
+                            <span className="achievements-progress-text">
+                                {badges.length > 0 ? Math.round((unlockedCount / badges.length) * 100) : 0}% Complete
+                            </span>
+                        </div>
+
+                        <div className="achievements-modal-content">
+                            {getCategorizedBadges().map((category, catIndex) => (
+                                <div key={catIndex} className="achievement-category">
+                                    <div className="category-header">
+                                        <span className="category-icon">{category.icon}</span>
+                                        <h3>{category.name}</h3>
+                                        <span className="category-progress">
+                                            {category.unlockedCount}/{category.badges.length}
+                                        </span>
+                                    </div>
+                                    <div className="category-badges-grid">
+                                        {category.badges.map((badge, badgeIndex) => (
+                                            <div
+                                                key={badgeIndex}
+                                                className={`category-badge-item ${badge.unlocked ? 'unlocked' : 'locked'}`}
+                                            >
+                                                <div className="category-badge-icon">
+                                                    {badge.icon}
+                                                </div>
+                                                <div className="category-badge-info">
+                                                    <span className="category-badge-name">{badge.name}</span>
+                                                    <span className="category-badge-desc">{badge.description}</span>
+                                                </div>
+                                                {badge.unlocked ? (
+                                                    <span className="badge-status unlocked">✓</span>
+                                                ) : (
+                                                    <span className="badge-status locked">🔒</span>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
