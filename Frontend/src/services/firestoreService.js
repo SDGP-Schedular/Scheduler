@@ -340,6 +340,29 @@ export const getChatHistory = async (userId, maxItems = 10) => {
     }
 };
 
+// ==================== NOTIFICATION LOGS ====================
+
+/**
+ * Get recent notification logs for a user
+ */
+export const getNotificationLogs = async (userId, maxItems = 10) => {
+    try {
+        const logsRef = collection(db, 'users', userId, 'notificationLogs');
+        const q = query(logsRef, orderBy('sentAt', 'desc'), limit(maxItems));
+        const querySnapshot = await getDocs(q);
+
+        const logs = [];
+        querySnapshot.forEach((doc) => {
+            logs.push({ id: doc.id, ...doc.data() });
+        });
+
+        return { success: true, data: logs };
+    } catch (error) {
+        console.error('Error getting notification logs:', error);
+        return { success: false, error: error.message };
+    }
+};
+
 // ==================== STUDY PLAN HISTORY ====================
 
 /**
@@ -385,7 +408,18 @@ export const getPlanHistory = async (userId, maxItems = 10) => {
 
         const plans = [];
         querySnapshot.forEach((doc) => {
-            plans.push({ id: doc.id, ...doc.data() });
+            const data = doc.data();
+            // Serialize Firestore Timestamps to ISO strings for safe localStorage caching
+            if (data.archivedAt?.toDate) {
+                data.archivedAt = data.archivedAt.toDate().toISOString();
+            }
+            if (data.createdAt?.toDate) {
+                data.createdAt = data.createdAt.toDate().toISOString();
+            }
+            if (data.updatedAt?.toDate) {
+                data.updatedAt = data.updatedAt.toDate().toISOString();
+            }
+            plans.push({ id: doc.id, ...data });
         });
 
         return { success: true, data: plans };
@@ -400,14 +434,16 @@ export const getPlanHistory = async (userId, maxItems = 10) => {
  */
 export const restorePlan = async (userId, planData) => {
     try {
-        // First archive the current plan
-        await archiveCurrentPlan(userId);
+        // Archive current plan in background (non-blocking for faster restore)
+        archiveCurrentPlan(userId).catch(err =>
+            console.warn('Could not archive current plan (may not exist):', err)
+        );
 
         // Now set the restored plan as current
         const planRef = doc(db, 'users', userId, 'data', 'studyPlan');
 
-        // Remove archive-specific fields
-        const { archivedAt, archiveId, ...planToRestore } = planData;
+        // Remove archive-specific fields (id is added by local archive, archiveId by Firestore)
+        const { archivedAt, archiveId, id, ...planToRestore } = planData;
 
         await setDoc(planRef, {
             ...planToRestore,
@@ -418,7 +454,7 @@ export const restorePlan = async (userId, planData) => {
         // Update localStorage
         localStorage.setItem('studyPlan', JSON.stringify(planToRestore));
 
-        return { success: true };
+        return { success: true, plan: planToRestore };
     } catch (error) {
         console.error('Error restoring plan:', error);
         return { success: false, error: error.message };
@@ -468,8 +504,17 @@ export const saveAchievement = async (userId, achievement) => {
 export const getAchievements = async (userId) => {
     try {
         const achievementsRef = collection(db, 'users', userId, 'achievements');
-        const q = query(achievementsRef, orderBy('unlockedAt', 'desc'));
-        const querySnapshot = await getDocs(q);
+        let querySnapshot;
+
+        try {
+            // Try ordered query first
+            const q = query(achievementsRef, orderBy('unlockedAt', 'desc'));
+            querySnapshot = await getDocs(q);
+        } catch (orderError) {
+            // Fallback: unordered query (handles mixed Timestamp/string unlockedAt)
+            console.warn('Ordered achievements query failed, using unordered:', orderError.message);
+            querySnapshot = await getDocs(achievementsRef);
+        }
 
         const achievements = [];
         querySnapshot.forEach((doc) => {
@@ -611,6 +656,50 @@ export const getSettings = async (userId) => {
         }
     } catch (error) {
         console.error('Error getting settings:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+// ==================== QUIZ RESULTS ====================
+
+/**
+ * Save quiz result to user's quiz history
+ */
+export const saveQuizResult = async (userId, quizData) => {
+    try {
+        const quizHistoryRef = collection(db, 'users', userId, 'quizHistory');
+        const quizDoc = doc(quizHistoryRef);
+
+        await setDoc(quizDoc, {
+            ...quizData,
+            completedAt: serverTimestamp()
+        });
+
+        console.log('✅ Quiz result saved successfully');
+        return { success: true, id: quizDoc.id };
+    } catch (error) {
+        console.error('Error saving quiz result:', error);
+        return { success: false, error: error.message };
+    }
+};
+
+/**
+ * Get quiz history for a user
+ */
+export const getQuizHistory = async (userId, maxItems = 20) => {
+    try {
+        const quizHistoryRef = collection(db, 'users', userId, 'quizHistory');
+        const q = query(quizHistoryRef, orderBy('completedAt', 'desc'), limit(maxItems));
+        const querySnapshot = await getDocs(q);
+
+        const quizzes = [];
+        querySnapshot.forEach((doc) => {
+            quizzes.push({ id: doc.id, ...doc.data() });
+        });
+
+        return { success: true, data: quizzes };
+    } catch (error) {
+        console.error('Error getting quiz history:', error);
         return { success: false, error: error.message };
     }
 };
