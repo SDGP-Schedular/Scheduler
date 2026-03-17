@@ -308,15 +308,18 @@
 .signup-form .input-icon {
     position: absolute;
     left: 0.875rem;
-    width: 16px;
-    height: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
     color: var(--gray-400);
     pointer-events: none;
+    z-index: 2;
 }
 
 .signup-form .input-wrapper input {
     width: 100%;
-    padding: 0.75rem 0.875rem 0.75rem 2.5rem;
+    padding: 0.75rem 0.875rem 0.75rem 2.75rem;
     border: 1px solid var(--gray-200);
     border-radius: var(--radius-md);
     font-size: 0.875rem;
@@ -542,4 +545,94 @@
     50% {
         transform: translateY(-15px) scale(1.03);
     }
+}
+
+/* ========== DARK THEME ========== */
+[data-theme="dark"] .signup-container {
+    background-color: #0f1117;
+}
+
+[data-theme="dark"] .signup-branding-panel {
+    background: linear-gradient(145deg, #0f1117 0%, #141824 100%);
+}
+
+[data-theme="dark"] .signup-title {
+    color: #f1f5f9;
+}
+
+[data-theme="dark"] .signup-subtitle {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .signup-branding-panel .oauth-btn {
+    background: #1a1f2e;
+    border-color: #2d3348;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .signup-branding-panel .oauth-btn:hover {
+    background: #252b3d;
+    border-color: #475569;
+}
+
+[data-theme="dark"] .signup-form-panel {
+    background: linear-gradient(145deg, #141824 0%, #1a1f2e 50%, #141824 100%);
+}
+
+[data-theme="dark"] .signup-form-panel .form-title {
+    color: #f1f5f9;
+}
+
+[data-theme="dark"] .signup-form .form-group label {
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .signup-form .input-wrapper input {
+    background: #141824;
+    border-color: #2d3348;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .signup-form .input-wrapper input:focus {
+    background: #0f1117;
+    border-color: var(--primary-purple);
+}
+
+[data-theme="dark"] .signup-form .input-wrapper input::placeholder {
+    color: #475569;
+}
+
+[data-theme="dark"] .signup-form .input-icon {
+    color: #475569;
+}
+
+[data-theme="dark"] .signup-form .password-toggle {
+    color: #64748b;
+}
+
+[data-theme="dark"] .signup-form .checkbox-wrapper {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .signup-form .custom-checkbox {
+    border-color: #475569;
+    background: #141824;
+}
+
+[data-theme="dark"] .field-error {
+    color: #f87171;
+}
+
+[data-theme="dark"] .signin-prompt {
+    color: #94a3b8;
+}
+
+[data-theme="dark"] .divider span {
+    color: #64748b;
+    background: #141824;
+}
+
+[data-theme="dark"] .divider::before,
+[data-theme="dark"] .divider::after {
+    background: #2d3348;
 }
