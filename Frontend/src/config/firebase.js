@@ -4,15 +4,18 @@
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, browserLocalPersistence, browserSessionPersistence, setPersistence } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, enableNetwork, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import { getMessaging, isSupported } from 'firebase/messaging';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyAEos1yWNEUzmJGs50y3yAUj28PnToFBZ4",
-    authDomain: "scheduler-c6d30.firebaseapp.com",
-    projectId: "scheduler-c6d30",
-    storageBucket: "scheduler-c6d30.firebasestorage.app",
-    messagingSenderId: "1073436054078",
-    appId: "1:1073436054078:web:9d52e44b4d5e51b1fc776f"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
@@ -21,8 +24,32 @@ const app = initializeApp(firebaseConfig);
 // Initialize Firebase Authentication
 export const auth = getAuth(app);
 
-// Initialize Cloud Firestore
-export const db = getFirestore(app);
+// Initialize Cloud Firestore with long-polling to avoid WebSocket issues
+export const db = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+    cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+});
+
+// Force Firestore online — prevents "client is offline" errors
+enableNetwork(db).catch((err) => {
+    console.warn('Firestore enableNetwork warning:', err);
+});
+
+// Initialize Firebase Storage
+export const storage = getStorage(app);
+
+// Initialize Firebase Cloud Messaging (FCM) if supported
+let messaging = null;
+if (typeof window !== 'undefined') {
+    isSupported().then((supported) => {
+        if (supported) {
+            messaging = getMessaging(app);
+        }
+    }).catch((err) => {
+        console.warn('FCM not supported in this browser:', err);
+    });
+}
+export { messaging };
 
 // Helper function to set persistence based on "Remember me" checkbox
 export const setAuthPersistence = async (rememberMe) => {
