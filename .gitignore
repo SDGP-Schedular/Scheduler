@@ -205,3 +205,14 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project-specific sensitive and generated files
+Backend/serviceAccountKey.json
+backend/serviceAccountKey.json
+Frontend/node_modules/
+frontend/node_modules/
+Frontend/dist/
+frontend/dist/
+.env.*
+!.env.example
+!**/.env.example

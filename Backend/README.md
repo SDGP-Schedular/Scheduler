@@ -43,6 +43,7 @@ Flask-based backend for the Scheduler application with Firebase Admin SDK integr
 | GET | `/api/auth/verify` | Yes | Verify token |
 | GET | `/api/user/profile` | Yes | Get user profile |
 | PUT | `/api/user/profile` | Yes | Update user profile |
+| POST | `/api/quiz/generate` | Yes | Generate AI quiz questions (rate limited: 10 req/min) |
 
 ## Authentication
 
