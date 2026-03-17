@@ -1191,12 +1191,21 @@ export const searchSubjects = (query) => {
     );
 };
 
-// Calculate study time based on weight
-// Higher weight = more study time
-export const calculateStudyTime = (subject, baseMinutes = 45) => {
+// Calculate study time based on weight AND knowledge level
+// Higher weight = more study time, lower knowledge = more study time
+export const calculateStudyTime = (subject, baseMinutes = 45, knowledgeLevel = 'intermediate') => {
     const weight = getSubjectWeight(subject);
-    // Weight 1 = 0.87x, Weight 10 = 1.5x
-    const multiplier = 0.8 + (weight / 10) * 0.7;
+    // Weight factor: Weight 1 = 0.87x, Weight 10 = 1.5x
+    const weightFactor = 0.8 + (weight / 10) * 0.7;
+    // Knowledge inverse multiplier: lower knowledge = more time needed
+    const knowledgeMultipliers = {
+        beginner: 1.5,      // needs 50% more time
+        intermediate: 1.0,  // baseline
+        advanced: 0.75,     // needs 25% less time
+        expert: 0.5         // needs 50% less time
+    };
+    const knowledgeFactor = knowledgeMultipliers[knowledgeLevel] || 1.0;
+    const multiplier = weightFactor * knowledgeFactor;
     return Math.round(baseMinutes * multiplier);
 };
 
