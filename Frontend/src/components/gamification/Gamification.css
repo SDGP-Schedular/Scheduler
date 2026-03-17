@@ -1,0 +1,733 @@
+/* Gamification Screen Styles */
+
+.gamification-container {
+    display: flex;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 100%);
+}
+
+/* Main Content */
+.gamification-container .main-content {
+    flex: 1;
+    margin-left: 70px;
+    padding: 1.5rem 2rem;
+    overflow-y: auto;
+}
+
+/* Header */
+.gamification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem 1rem;
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.header-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+}
+
+.header-title {
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: #1F2937;
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.level-badge {
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.user-avatar-small {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #F59E0B, #EC4899);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    border: 2px solid white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Grid Layout */
+.gamification-grid {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 1.5rem;
+}
+
+.left-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.right-column {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Cards */
+.card {
+    background: white;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.card h2 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #1F2937;
+    margin: 0 0 1rem 0;
+}
+
+.card h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1F2937;
+    margin: 0 0 1rem 0;
+}
+
+/* Level Progress Card */
+.level-progress-card {
+    background: linear-gradient(to right, #FFFFFF, #F8FAFC);
+}
+
+.level-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.level-tag {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: white;
+    padding: 0.375rem 0.75rem;
+    border-radius: 16px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.star-icon {
+    font-size: 0.875rem;
+}
+
+.level-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+    color: #6B7280;
+    margin-bottom: 0.75rem;
+}
+
+.progress-bar-container {
+    height: 32px;
+    background: #E5E7EB;
+    border-radius: 16px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #10B981, #34D399);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: width 0.5s ease;
+    min-width: 150px;
+}
+
+.progress-text {
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    white-space: nowrap;
+}
+
+.xp-needed {
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
+    color: #6B7280;
+}
+
+/* Subjects Card */
+.subjects-card {
+    padding-bottom: 1.25rem;
+}
+
+.subjects-grid,
+.manual-subjects-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.subject-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.625rem 1rem;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.subject-chip:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.subject-chip.selected {
+    border-color: rgba(255, 255, 255, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.subject-icon {
+    font-size: 1.125rem;
+}
+
+.no-plan-message {
+    text-align: center;
+    color: #6B7280;
+    padding: 1rem 0;
+}
+
+.no-plan-message p {
+    margin-bottom: 1rem;
+}
+
+.manual-select-btn {
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 1rem;
+}
+
+.manual-select-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+}
+
+.enter-quiz-btn {
+    width: 100%;
+    max-width: 200px;
+    margin: 0 auto;
+    display: block;
+    background: linear-gradient(135deg, #6366F1, #8B5CF6);
+    color: white;
+    border: none;
+    padding: 0.875rem 2rem;
+    border-radius: 25px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.enter-quiz-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+}
+
+.enter-quiz-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Achievements Card */
+.achievements-header,
+.badges-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.view-all-btn {
+    background: none;
+    border: none;
+    color: #6366F1;
+    font-weight: 500;
+    cursor: pointer;
+    font-size: 0.875rem;
+}
+
+.view-all-btn:hover {
+    text-decoration: underline;
+}
+
+.achievements-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+}
+
+.achievement-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+}
+
+.achievement-item.placeholder {
+    opacity: 0.7;
+}
+
+.achievement-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    background: #F3F4F6;
+}
+
+.achievement-icon.gold {
+    background: linear-gradient(135deg, #FCD34D, #F59E0B);
+}
+
+.achievement-icon.silver {
+    background: linear-gradient(135deg, #E5E7EB, #9CA3AF);
+}
+
+.achievement-icon.bronze {
+    background: linear-gradient(135deg, #FDBA74, #F97316);
+}
+
+.achievement-icon.purple {
+    background: linear-gradient(135deg, #C4B5FD, #8B5CF6);
+}
+
+.achievement-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: #1F2937;
+}
+
+.achievement-date {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+}
+
+/* Badges Card */
+.badges-progress {
+    font-size: 0.875rem;
+    color: #6B7280;
+}
+
+.badges-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+}
+
+.badge-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.375rem;
+    width: 72px;
+}
+
+.badge-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    background: linear-gradient(135deg, #FCD34D, #F59E0B);
+    transition: all 0.2s ease;
+}
+
+.badge-item.locked .badge-icon {
+    background: #E5E7EB;
+    opacity: 0.5;
+}
+
+.badge-item.unlocked .badge-icon {
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.badge-name {
+    font-size: 0.75rem;
+    color: #6B7280;
+    text-align: center;
+}
+
+.badge-item.locked .badge-name {
+    color: #9CA3AF;
+}
+
+/* Challenges Card */
+.challenge-item {
+    background: #F9FAFB;
+    border-radius: 12px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.challenge-item:last-child {
+    margin-bottom: 0;
+}
+
+.challenge-info {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.challenge-title {
+    font-weight: 600;
+    color: #1F2937;
+}
+
+.challenge-reward {
+    color: #6366F1;
+    font-weight: 600;
+}
+
+.challenge-progress {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.875rem;
+    color: #6B7280;
+    margin-bottom: 0.5rem;
+}
+
+.challenge-time {
+    color: #9CA3AF;
+}
+
+.challenge-bar {
+    height: 8px;
+    background: #E5E7EB;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.challenge-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366F1, #8B5CF6);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.challenge-bar-fill.green {
+    background: linear-gradient(90deg, #10B981, #34D399);
+}
+
+/* Streak Card */
+.streak-card {
+    text-align: center;
+    background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+    border: none;
+}
+
+.streak-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.streak-number {
+    font-size: 3rem;
+    font-weight: 800;
+    color: #F59E0B;
+    line-height: 1;
+}
+
+.streak-label {
+    color: #92400E;
+    font-size: 0.875rem;
+}
+
+/* Current Level Card */
+.current-level-card {
+    text-align: center;
+}
+
+.level-circle {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10B981, #34D399);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: white;
+    margin: 0 auto 0.75rem;
+    box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+}
+
+.level-title {
+    color: #10B981;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.achievements-count {
+    display: block;
+    font-size: 0.8rem;
+    color: #6B7280;
+    margin-top: 0.25rem;
+}
+
+/* Quick Stats Card */
+.stats-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.875rem;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stat-label {
+    color: #6B7280;
+    font-size: 0.9rem;
+}
+
+.stat-value {
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.stat-value.blue {
+    color: #6366F1;
+}
+
+.stat-value.green {
+    color: #10B981;
+}
+
+.stat-value.orange {
+    color: #F59E0B;
+}
+
+.stat-value.gray {
+    color: #6B7280;
+}
+
+/* Rewards Card */
+.reward-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #F3F4F6;
+}
+
+.reward-item:last-child {
+    border-bottom: none;
+}
+
+.reward-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+}
+
+.reward-icon.gold {
+    background: linear-gradient(135deg, #FCD34D, #F59E0B);
+}
+
+.reward-icon.orange {
+    background: linear-gradient(135deg, #FDBA74, #F97316);
+}
+
+.reward-icon.green {
+    background: linear-gradient(135deg, #6EE7B7, #10B981);
+}
+
+.reward-info {
+    flex: 1;
+}
+
+.reward-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #1F2937;
+    display: block;
+}
+
+.reward-desc {
+    font-size: 0.8rem;
+    color: #6B7280;
+}
+
+.reward-xp,
+.reward-days,
+.reward-level {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.reward-xp {
+    color: #6366F1;
+}
+
+.reward-days {
+    color: #F59E0B;
+}
+
+.reward-level {
+    color: #10B981;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .gamification-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .right-column {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .gamification-container .main-content {
+        margin-left: 0;
+        margin-bottom: 60px;
+        padding: 1rem;
+    }
+
+    .achievements-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .right-column {
+        grid-template-columns: 1fr;
+    }
+
+    .subjects-grid,
+    .manual-subjects-grid {
+        justify-content: center;
+    }
+}
+
+/* Quiz Configuration Styles */
+.quiz-config-description {
+    text-align: center;
+    color: #6B7280;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.quiz-config-section {
+    margin-bottom: 1.25rem;
+}
+
+.quiz-config-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+
+.quiz-dropdown {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid #E5E7EB;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    color: #1F2937;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.quiz-dropdown:hover {
+    border-color: #6366F1;
+}
+
+.quiz-dropdown:focus {
+    outline: none;
+    border-color: #6366F1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.quiz-settings-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #E5E7EB 50%, transparent);
+    margin: 1.5rem 0 1.25rem 0;
+}
+
+.quiz-settings-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1F2937;
+    margin: 0 0 1.25rem 0;
+    text-align: center;
+}
+
+.quiz-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .quiz-settings-grid {
+        grid-template-columns: 1fr;
+    }
+}
