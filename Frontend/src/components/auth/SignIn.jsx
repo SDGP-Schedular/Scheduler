@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import {
     signInWithEmailAndPassword,
     signInWithPopup,
@@ -7,12 +7,14 @@ import {
     sendPasswordResetEmail
 } from 'firebase/auth';
 import { auth, setAuthPersistence } from '../../config/firebase';
+import { useLanguage } from '../../i18n/LanguageContext';
 import robotMascot from '../../assets/robot-mascot.png';
 import schedulerLogo from '../../assets/scheduler-logo.png';
 import './SignIn.css';
 
 const SignIn = () => {
     const navigate = useNavigate();
+    const { t } = useLanguage();
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -130,13 +132,13 @@ const SignIn = () => {
                     {/* Logo */}
                     <div className="signin-logo">
                         <img src={schedulerLogo} alt="Scheduler Logo" className="logo-image" />
-                        <span className="logo-text">Scheduler</span>
+                        <span className="logo-text">{t('app_name')}</span>
                     </div>
-                    <p className="signin-tagline">Your intelligent study companion</p>
+                    <p className="signin-tagline">{t('auth_tagline')}</p>
 
                     {/* Welcome Text */}
-                    <h1 className="signin-title">Welcome back</h1>
-                    <p className="signin-subtitle">Sign in to continue your learning journey</p>
+                    <h1 className="signin-title">{t('auth_welcome_back')}</h1>
+                    <p className="signin-subtitle">{t('auth_signin_subtitle')}</p>
 
                     {/* Error Message */}
                     {error && <div className="signin-error">{error}</div>}
@@ -155,7 +157,7 @@ const SignIn = () => {
                                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                             </svg>
-                            Continue with Google
+                            {t('auth_google')}
                         </button>
                     </div>
 
@@ -167,12 +169,8 @@ const SignIn = () => {
                     {/* Sign In Form */}
                     <form onSubmit={handleEmailSignIn} className="signin-form">
                         <div className="form-group">
-                            <label htmlFor="email">Email address</label>
+                            <label htmlFor="email">{t('auth_email')}</label>
                             <div className="input-wrapper">
-                                <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <rect x="2" y="4" width="20" height="16" rx="2" />
-                                    <path d="M22 6L12 13L2 6" />
-                                </svg>
                                 <input
                                     type="email"
                                     id="email"
@@ -187,13 +185,8 @@ const SignIn = () => {
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="password">Password</label>
+                            <label htmlFor="password">{t('auth_password')}</label>
                             <div className="input-wrapper">
-                                <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" />
-                                    <circle cx="12" cy="16" r="1" />
-                                    <path d="M7 11V7a5 5 0 0110 0v4" />
-                                </svg>
                                 <input
                                     type={showPassword ? 'text' : 'password'}
                                     id="password"
@@ -234,14 +227,14 @@ const SignIn = () => {
                                     disabled={loading}
                                 />
                                 <span className="checkmark"></span>
-                                Remember me
+                                {t('auth_remember')}
                             </label>
                             <button
                                 type="button"
                                 className="forgot-password-link"
                                 onClick={() => setShowForgotPassword(true)}
                             >
-                                Forgot password?
+                                {t('auth_forgot')}
                             </button>
                         </div>
 
@@ -250,13 +243,13 @@ const SignIn = () => {
                             className="signin-btn"
                             disabled={loading}
                         >
-                            {loading ? 'Signing in...' : 'Sign in'}
+                            {loading ? t('common_loading') : t('auth_signin')}
                         </button>
                     </form>
 
                     {/* Sign Up Link */}
                     <p className="signup-prompt">
-                        Don't have an account? <a href="/signup" className="signup-link">Sign up</a>
+                        {t('auth_no_account')} <Link to="/signup" className="signup-link">{t('auth_signup')}</Link>
                     </p>
                 </div>
             </div>
@@ -341,7 +334,7 @@ const SignIn = () => {
                                 <h2>Check your email</h2>
                                 <p>We've sent a password reset link to <strong>{resetEmail}</strong></p>
                                 <button className="signin-btn" onClick={closeForgotPasswordModal}>
-                                    Back to Sign In
+                                    {t('auth_signin')}
                                 </button>
                             </div>
                         ) : (
@@ -353,12 +346,8 @@ const SignIn = () => {
 
                                 <form onSubmit={handleForgotPassword}>
                                     <div className="form-group">
-                                        <label htmlFor="resetEmail">Email address</label>
+                                        <label htmlFor="resetEmail">{t('auth_email')}</label>
                                         <div className="input-wrapper">
-                                            <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <rect x="2" y="4" width="20" height="16" rx="2" />
-                                                <path d="M22 6L12 13L2 6" />
-                                            </svg>
                                             <input
                                                 type="email"
                                                 id="resetEmail"
