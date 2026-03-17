@@ -1,0 +1,215 @@
+/* Sidebar.css */
+.sidebar {
+    width: 70px;
+    background-color: var(--white);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem 0;
+    border-right: 1px solid var(--gray-200);
+    position: fixed;
+    height: 100vh;
+    z-index: 100;
+    top: 0;
+    left: 0;
+}
+
+.sidebar-logo {
+    margin-bottom: 2rem;
+}
+
+.sidebar-logo-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex: 1;
+    width: 100%;
+    align-items: center;
+}
+
+.nav-item {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    color: var(--gray-400);
+    transition: all var(--transition-fast);
+    border: none;
+    background: none;
+    cursor: pointer;
+}
+
+.nav-item:hover {
+    background-color: var(--gray-100);
+    color: var(--gray-600);
+}
+
+.nav-item.active {
+    background-color: var(--primary-purple);
+    color: white;
+}
+
+.nav-item svg {
+    width: 22px;
+    height: 22px;
+}
+
+.sidebar-bottom {
+    margin-top: auto;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.user-avatar-btn {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--primary-purple) 0%, var(--primary-purple-light) 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    border: none;
+    cursor: pointer;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    padding: 0;
+}
+
+.user-avatar-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.user-avatar-btn.active {
+    box-shadow: 0 0 0 3px var(--primary-purple);
+}
+
+.user-avatar-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-avatar-initial {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.logout-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+    background: none;
+    color: #ef4444;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logout-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.logout-btn:hover {
+    background-color: #fee2e2;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 600px) {
+    .sidebar {
+        width: 100%;
+        height: 60px;
+        flex-direction: row;
+        top: auto;
+        bottom: 0;
+        padding: 0;
+        border-right: none;
+        border-top: 1px solid var(--gray-200);
+        justify-content: space-around;
+        background-color: var(--white);
+    }
+
+    .sidebar-logo,
+    .sidebar-bottom {
+        display: none;
+    }
+
+    .sidebar-nav {
+        flex-direction: row;
+        width: 100%;
+        height: 100%;
+        justify-content: space-around;
+        gap: 0;
+        padding: 0 0.5rem;
+    }
+
+    .nav-item {
+        width: 50px;
+        height: 100%;
+        border-radius: 0;
+    }
+
+    .nav-item.active {
+        background-color: transparent;
+        color: var(--primary-purple);
+        border-bottom: 3px solid var(--primary-purple);
+    }
+}
+
+/* ========== DARK THEME ========== */
+[data-theme="dark"] .sidebar {
+    background-color: #0f1117;
+    border-right-color: #1e293b;
+}
+
+[data-theme="dark"] .nav-item {
+    color: #64748b;
+}
+
+[data-theme="dark"] .nav-item:hover {
+    background-color: #1e293b;
+    color: #e2e8f0;
+}
+
+[data-theme="dark"] .nav-item.active {
+    background-color: var(--primary-purple);
+    color: white;
+}
+
+[data-theme="dark"] .user-avatar-btn {
+    box-shadow: 0 0 0 2px #1e293b;
+}
+
+[data-theme="dark"] .logout-btn {
+    color: #f87171;
+}
+
+[data-theme="dark"] .logout-btn:hover {
+    background-color: #3f1d1d;
+}
+
+@media (max-width: 600px) {
+    [data-theme="dark"] .sidebar {
+        background-color: #0f1117;
+        border-top-color: #1e293b;
+    }
+}
