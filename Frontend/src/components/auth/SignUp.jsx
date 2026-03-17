@@ -10,15 +10,18 @@ import {
     signInWithEmailLink
 } from 'firebase/auth';
 import { auth, setAuthPersistence } from '../../config/firebase';
+import { useLanguage } from '../../i18n/LanguageContext';
 import schedulerLogo from '../../assets/scheduler-logo.png';
 import aiBrain from '../../assets/ai-brain.png';
 import './SignUp.css';
 
 const SignUp = () => {
     const navigate = useNavigate();
+    const { t } = useLanguage();
     const [formData, setFormData] = useState({
         email: '',
         phone: '',
+        username: '',
         otp: '',
         password: '',
         confirmPassword: ''
@@ -89,6 +92,10 @@ const SignUp = () => {
 
         if (!formData.phone) {
             errors.phone = 'Phone number is required';
+        }
+
+        if (!formData.username) {
+            errors.username = 'Username is required';
         }
 
         if (!formData.password) {
@@ -180,9 +187,9 @@ const SignUp = () => {
                 formData.password
             );
 
-            // Update user profile with phone number (stored in displayName for now)
+            // Update user profile with username
             await updateProfile(userCredential.user, {
-                displayName: formData.phone
+                displayName: formData.username
             });
 
             // Redirect to dashboard after successful sign up
@@ -241,8 +248,8 @@ const SignUp = () => {
                     <p className="signup-tagline">Your intelligent study companion</p>
 
                     {/* Welcome Text */}
-                    <h1 className="signup-title">Welcome To Scheduler</h1>
-                    <p className="signup-subtitle">Sign up to continue your learning journey</p>
+                    <h1 className="signup-title">{t('auth_welcome_signup')}</h1>
+                    <p className="signup-subtitle">{t('auth_signup_subtitle')}</p>
 
                     {/* OAuth Buttons */}
                     <div className="oauth-buttons">
@@ -258,7 +265,7 @@ const SignUp = () => {
                                 <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
                                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
                             </svg>
-                            Continue with Google
+                            {t('auth_google')}
                         </button>
                     </div>
 
@@ -291,7 +298,7 @@ const SignUp = () => {
                     <form onSubmit={handleSignUp} className="signup-form">
                         {/* Email with OTP Button */}
                         <div className="form-group">
-                            <label htmlFor="email">Email address</label>
+                            <label htmlFor="email">{t('auth_email')}</label>
                             <div className="input-with-button">
                                 <div className="input-wrapper">
                                     <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -340,9 +347,30 @@ const SignUp = () => {
                             {fieldErrors.phone && <span className="field-error">{fieldErrors.phone}</span>}
                         </div>
 
+                        {/* Username */}
+                        <div className="form-group">
+                            <label htmlFor="username">Username</label>
+                            <div className="input-wrapper">
+                                <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                                    <circle cx="12" cy="7" r="4" />
+                                </svg>
+                                <input
+                                    type="text"
+                                    id="username"
+                                    name="username"
+                                    value={formData.username}
+                                    onChange={handleInputChange}
+                                    placeholder="Enter your username"
+                                    disabled={loading}
+                                />
+                            </div>
+                            {fieldErrors.username && <span className="field-error">{fieldErrors.username}</span>}
+                        </div>
+
                         {/* Password */}
                         <div className="form-group">
-                            <label htmlFor="password">Password</label>
+                            <label htmlFor="password">{t('auth_password')}</label>
                             <div className="input-wrapper">
                                 <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <rect x="3" y="11" width="18" height="11" rx="2" />
@@ -429,7 +457,7 @@ const SignUp = () => {
                                 disabled={loading}
                             />
                             <span className="checkmark"></span>
-                            Remember me
+                            {t('auth_remember')}
                         </label>
 
                         {/* Sign In Button */}
