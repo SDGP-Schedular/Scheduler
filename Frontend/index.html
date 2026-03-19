@@ -22,19 +22,5 @@
     </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <script>
-      // Register the service worker for push notifications
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js', { scope: '/' })
-            .then((registration) => {
-              console.log('Service Worker registered successfully:', registration);
-            })
-            .catch((error) => {
-              console.warn('Service Worker registration failed:', error);
-            });
-        });
-      }
-    </script>
   </body>
 </html>

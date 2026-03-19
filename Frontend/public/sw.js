@@ -7,47 +7,62 @@
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.7.0/firebase-messaging-compat.js');
 
-// Initialize Firebase in the service worker
-firebase.initializeApp({
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-});
+// Read Firebase config from service worker URL query params
+const swUrl = new URL(self.location.href);
+const firebaseConfig = {
+    apiKey: swUrl.searchParams.get('apiKey') || '',
+    authDomain: swUrl.searchParams.get('authDomain') || '',
+    projectId: swUrl.searchParams.get('projectId') || '',
+    storageBucket: swUrl.searchParams.get('storageBucket') || '',
+    messagingSenderId: swUrl.searchParams.get('messagingSenderId') || '',
+    appId: swUrl.searchParams.get('appId') || '',
+    measurementId: swUrl.searchParams.get('measurementId') || '',
+};
 
-// Get Firebase Messaging instance
-const messaging = firebase.messaging();
+const hasRequiredFirebaseConfig =
+    !!firebaseConfig.apiKey &&
+    !!firebaseConfig.projectId &&
+    !!firebaseConfig.messagingSenderId &&
+    !!firebaseConfig.appId;
 
-// Handle incoming push messages when the app is in the background
-messaging.onBackgroundMessage((payload) => {
-    console.log('[sw.js] Received background message:', payload);
+if (hasRequiredFirebaseConfig) {
+    try {
+        firebase.initializeApp(firebaseConfig);
+        const messaging = firebase.messaging();
 
-    const notificationTitle = payload.notification?.title || 'Scheduler Reminder';
-    const notificationOptions = {
-        body: payload.notification?.body || 'You have a new notification',
-        icon: '/scheduler-icon.png',
-        badge: '/scheduler-badge.png',
-        tag: payload.notification?.tag || 'notification',
-        data: payload.data || {},
-        actions: [
-            {
-                action: 'open',
-                title: 'Open',
-                icon: '/open-icon.png'
-            },
-            {
-                action: 'close',
-                title: 'Close',
-                icon: '/close-icon.png'
-            }
-        ]
-    };
+        // Handle incoming push messages when the app is in the background
+        messaging.onBackgroundMessage((payload) => {
+            console.log('[sw.js] Received background message:', payload);
 
-    // Show the notification
-    self.registration.showNotification(notificationTitle, notificationOptions);
-});
+            const notificationTitle = payload.notification?.title || 'Scheduler Reminder';
+            const notificationOptions = {
+                body: payload.notification?.body || 'You have a new notification',
+                icon: '/scheduler-icon.png',
+                badge: '/scheduler-badge.png',
+                tag: payload.notification?.tag || 'notification',
+                data: payload.data || {},
+                actions: [
+                    {
+                        action: 'open',
+                        title: 'Open',
+                        icon: '/open-icon.png'
+                    },
+                    {
+                        action: 'close',
+                        title: 'Close',
+                        icon: '/close-icon.png'
+                    }
+                ]
+            };
+
+            self.registration.showNotification(notificationTitle, notificationOptions);
+        });
+    } catch (error) {
+        console.error('[sw.js] Firebase initialization failed:', error);
+    }
+} else {
+    console.warn('[sw.js] Firebase config missing required values; background messaging disabled.');
+}
 
 // Handle notification click
 self.addEventListener('notificationclick', (event) => {
