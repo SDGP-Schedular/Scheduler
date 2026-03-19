@@ -22,7 +22,7 @@ class Config:
     CORS_ORIGINS = [
         origin.strip() for origin in os.getenv(
             'CORS_ORIGINS',
-            'https://scheduler-p8k7.vercel.app,http://localhost:5173,http://localhost:3000'
+            'https://app.scheduler.it.com,http://localhost:5173,http://localhost:3000'
         ).split(',') if origin.strip()
     ]
     

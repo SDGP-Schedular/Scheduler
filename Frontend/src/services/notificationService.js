@@ -7,7 +7,7 @@ import { messaging } from '../config/firebase';
 import { onMessage } from 'firebase/messaging';
 import { auth } from '../config/firebase';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://scheduler-qogb.onrender.com/api').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://api.scheduler.it.com/api').replace(/\/$/, '');
 
 /**
  * Request notification permission and get FCM token
