@@ -57,8 +57,38 @@ export const getFCMToken = async () => {
         }
 
         const { getToken } = await import('firebase/messaging');
+        let serviceWorkerRegistration;
+
+        if ('serviceWorker' in navigator) {
+            try {
+                serviceWorkerRegistration = await navigator.serviceWorker.ready;
+            } catch (swError) {
+                console.warn('Service Worker not ready for FCM token request:', swError);
+            }
+
+            if (!serviceWorkerRegistration) {
+                try {
+                    const params = new URLSearchParams({
+                        apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
+                        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || '',
+                        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || '',
+                        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
+                        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+                        appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+                        measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
+                    });
+
+                    const swUrl = `/sw.js?${params.toString()}`;
+                    serviceWorkerRegistration = await navigator.serviceWorker.register(swUrl, { scope: '/' });
+                } catch (swRegisterError) {
+                    console.warn('Failed to register service worker for FCM token request:', swRegisterError);
+                }
+            }
+        }
+
         const token = await getToken(messaging, {
-            vapidKey
+            vapidKey,
+            serviceWorkerRegistration
         });
 
         if (token) {
