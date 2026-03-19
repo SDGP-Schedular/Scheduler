@@ -6,7 +6,7 @@
 import { auth } from '../config/firebase';
 import { getFallbackQuestions, cacheAiQuestions } from '../data/fallbackQuestions';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://scheduler-qogb.onrender.com/api').replace(/\/$/, '');
 
 // Wait for Firebase auth to finish rehydrating (handles page refresh / cold load)
 const waitForAuth = () => {
