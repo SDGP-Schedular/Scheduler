@@ -19,7 +19,12 @@ class Config:
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
     
     # CORS Configuration
-    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5173').split(',')
+    CORS_ORIGINS = [
+        origin.strip() for origin in os.getenv(
+            'CORS_ORIGINS',
+            'https://scheduler-p8k7.vercel.app,http://localhost:5173,http://localhost:3000'
+        ).split(',') if origin.strip()
+    ]
     
     # Debug mode
     DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
