@@ -460,13 +460,13 @@ const SignUp = () => {
                             {t('auth_remember')}
                         </label>
 
-                        {/* Sign In Button */}
+                        {/* Sign Up Button */}
                         <button
                             type="submit"
                             className="signup-btn"
                             disabled={loading}
                         >
-                            {loading ? 'Creating account...' : 'Sign in'}
+                            {loading ? 'Creating account...' : 'Sign up'}
                         </button>
                     </form>
 
