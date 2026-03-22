@@ -6,6 +6,7 @@ Flask server with Firebase Admin SDK integration
 import os
 import time
 import logging
+import json
 from datetime import datetime, timezone, timedelta
 from functools import wraps
 from collections import defaultdict
@@ -176,22 +177,54 @@ def create_app(config_name=None):
 
 def initialize_firebase(app):
     """Initialize Firebase Admin SDK."""
+
+    def _resolve_project_id(service_account_path):
+        project_id = app.config.get('FIREBASE_PROJECT_ID') or os.getenv('GOOGLE_CLOUD_PROJECT', '')
+        if project_id:
+            return project_id
+
+        if service_account_path and os.path.exists(service_account_path):
+            try:
+                with open(service_account_path, 'r', encoding='utf-8') as service_account_file:
+                    service_account_data = json.load(service_account_file)
+                    return service_account_data.get('project_id', '')
+            except Exception as read_err:
+                logger.warning(f"Could not read project_id from service account file: {read_err}")
+
+        return ''
+
     try:
         # Check if Firebase is already initialized
         firebase_admin.get_app()
     except ValueError:
         # Initialize Firebase
         service_account_path = app.config['FIREBASE_SERVICE_ACCOUNT_PATH']
+        project_id = _resolve_project_id(service_account_path)
+        options = {'projectId': project_id} if project_id else None
+
+        if project_id:
+            logger.info(f"Using Firebase project ID: {project_id}")
+        else:
+            logger.warning(
+                "Firebase project ID is not configured. "
+                "Set FIREBASE_PROJECT_ID or GOOGLE_CLOUD_PROJECT to avoid token verification failures."
+            )
 
         if os.path.exists(service_account_path):
             cred = credentials.Certificate(service_account_path)
-            firebase_admin.initialize_app(cred)
+            if options:
+                firebase_admin.initialize_app(cred, options)
+            else:
+                firebase_admin.initialize_app(cred)
             logger.info(f"Firebase initialized with service account: {service_account_path}")
         else:
             logger.warning(f"Service account file not found at: {service_account_path}")
             logger.info("Firebase Admin SDK will use default credentials if available.")
             try:
-                firebase_admin.initialize_app()
+                if options:
+                    firebase_admin.initialize_app(options=options)
+                else:
+                    firebase_admin.initialize_app()
                 logger.info("Firebase initialized with default credentials")
             except Exception as e:
                 logger.error(f"Failed to initialize Firebase: {e}")

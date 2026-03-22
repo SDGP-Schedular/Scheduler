@@ -14,6 +14,12 @@ class Config:
         'FIREBASE_SERVICE_ACCOUNT_PATH', 
         'serviceAccountKey.json'
     )
+
+    # Firebase project ID used by Admin SDK for token verification
+    FIREBASE_PROJECT_ID = os.getenv(
+        'FIREBASE_PROJECT_ID',
+        os.getenv('GOOGLE_CLOUD_PROJECT', '')
+    )
     
     # Google Gemini API Configuration
     GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
