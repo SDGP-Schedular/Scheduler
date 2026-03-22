@@ -178,10 +178,26 @@ def create_app(config_name=None):
 def initialize_firebase(app):
     """Initialize Firebase Admin SDK."""
 
+    def _load_service_account_from_env():
+        raw_service_account = os.getenv('FIREBASE_SERVICE_ACCOUNT_JSON', '')
+        if not raw_service_account:
+            return None
+
+        try:
+            service_account_data = json.loads(raw_service_account)
+            return service_account_data
+        except Exception as parse_err:
+            logger.error(f"Invalid FIREBASE_SERVICE_ACCOUNT_JSON value: {parse_err}")
+            return None
+
     def _resolve_project_id(service_account_path):
         project_id = app.config.get('FIREBASE_PROJECT_ID') or os.getenv('GOOGLE_CLOUD_PROJECT', '')
         if project_id:
             return project_id
+
+        env_service_account = _load_service_account_from_env()
+        if env_service_account and env_service_account.get('project_id'):
+            return env_service_account.get('project_id', '')
 
         if service_account_path and os.path.exists(service_account_path):
             try:
@@ -199,6 +215,7 @@ def initialize_firebase(app):
     except ValueError:
         # Initialize Firebase
         service_account_path = app.config['FIREBASE_SERVICE_ACCOUNT_PATH']
+        env_service_account = _load_service_account_from_env()
         project_id = _resolve_project_id(service_account_path)
         options = {'projectId': project_id} if project_id else None
 
@@ -217,6 +234,13 @@ def initialize_firebase(app):
             else:
                 firebase_admin.initialize_app(cred)
             logger.info(f"Firebase initialized with service account: {service_account_path}")
+        elif env_service_account:
+            cred = credentials.Certificate(env_service_account)
+            if options:
+                firebase_admin.initialize_app(cred, options)
+            else:
+                firebase_admin.initialize_app(cred)
+            logger.info("Firebase initialized with FIREBASE_SERVICE_ACCOUNT_JSON credentials")
         else:
             logger.warning(f"Service account file not found at: {service_account_path}")
             logger.info("Firebase Admin SDK will use default credentials if available.")

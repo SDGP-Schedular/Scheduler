@@ -9,6 +9,30 @@ import { auth } from '../config/firebase';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://api.scheduler.it.com/api').replace(/\/$/, '');
 
+const waitForAuth = () => {
+    return new Promise((resolve, reject) => {
+        if (auth.currentUser) {
+            resolve(auth.currentUser);
+            return;
+        }
+
+        const timeout = setTimeout(() => {
+            unsubscribe();
+            reject(new Error('User not authenticated. Please sign in again.'));
+        }, 10000);
+
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+            clearTimeout(timeout);
+            unsubscribe();
+            if (user) {
+                resolve(user);
+            } else {
+                reject(new Error('User not authenticated. Please sign in again.'));
+            }
+        });
+    });
+};
+
 /**
  * Request notification permission and get FCM token
  * @returns Promise with token or null if permission denied
@@ -113,25 +137,38 @@ export const getFCMToken = async () => {
  */
 export const registerFCMTokenWithBackend = async (token) => {
     try {
-        if (!token || !auth.currentUser) {
-            console.log('Missing token or user not authenticated');
+        if (!token) {
+            console.log('Missing FCM token');
             return { success: false };
         }
 
-        const idToken = await auth.currentUser.getIdToken();
+        const user = await waitForAuth();
 
-        const response = await fetch(`${API_BASE_URL}/notifications/register-device`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${idToken}`
-            },
-            body: JSON.stringify({
-                fcmToken: token,
-                deviceType: 'web',
-                userAgent: navigator.userAgent
-            })
-        });
+        const sendRegisterRequest = async (forceRefresh = false) => {
+            const idToken = await user.getIdToken(forceRefresh);
+
+            const response = await fetch(`${API_BASE_URL}/notifications/register-device`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${idToken}`
+                },
+                body: JSON.stringify({
+                    fcmToken: token,
+                    deviceType: 'web',
+                    userAgent: navigator.userAgent
+                })
+            });
+
+            return response;
+        };
+
+        let response = await sendRegisterRequest(false);
+
+        if (response.status === 401) {
+            console.warn('register-device returned 401, retrying with refreshed token');
+            response = await sendRegisterRequest(true);
+        }
 
         let data = {};
         const raw = await response.text();
@@ -147,8 +184,18 @@ export const registerFCMTokenWithBackend = async (token) => {
             console.log('FCM token registered with backend');
             return { success: true, data };
         } else {
-            console.error('Failed to register FCM token:', data);
-            return { success: false, error: data.error || `HTTP ${response.status}` };
+            console.error('Failed to register FCM token:', {
+                status: response.status,
+                error: data.error,
+                code: data.code,
+                details: data.details
+            });
+            return {
+                success: false,
+                error: data.error || `HTTP ${response.status}`,
+                code: data.code,
+                details: data.details
+            };
         }
     } catch (error) {
         console.error('Error registering FCM token:', error);
