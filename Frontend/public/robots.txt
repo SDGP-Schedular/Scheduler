@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://scheduler.it.com/sitemap.xml
