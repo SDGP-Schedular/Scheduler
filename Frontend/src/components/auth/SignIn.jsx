@@ -7,6 +7,7 @@ import {
     sendPasswordResetEmail
 } from 'firebase/auth';
 import { auth, setAuthPersistence } from '../../config/firebase';
+import { initializeUserProfile, saveUserProfile } from '../../services/firestoreService';
 import { useLanguage } from '../../i18n/LanguageContext';
 import robotMascot from '../../assets/robot-mascot.png';
 import schedulerLogo from '../../assets/scheduler-logo.png';
@@ -43,8 +44,13 @@ const SignIn = () => {
 
         try {
             await setAuthPersistence(rememberMe);
-            await signInWithEmailAndPassword(auth, formData.email, formData.password);
+            const userCredential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
             navigate('/dashboard');
+
+            void initializeUserProfile(userCredential.user.uid, userCredential.user.email || formData.email)
+                .catch((error) => {
+                    console.warn('User profile init failed on sign in:', error);
+                });
         } catch (err) {
             console.error('Sign in error:', err);
             switch (err.code) {
@@ -78,8 +84,22 @@ const SignIn = () => {
         try {
             await setAuthPersistence(rememberMe);
             const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
+            const userCredential = await signInWithPopup(auth, provider);
             navigate('/dashboard');
+
+            void initializeUserProfile(userCredential.user.uid, userCredential.user.email || '')
+                .catch((error) => {
+                    console.warn('User profile init failed after Google sign in:', error);
+                });
+
+            void saveUserProfile(userCredential.user.uid, {
+                email: userCredential.user.email || '',
+                displayName: userCredential.user.displayName || 'User',
+                firstName: userCredential.user.displayName || 'User',
+                provider: 'google'
+            }).catch((error) => {
+                console.warn('User profile write failed after Google sign in:', error);
+            });
         } catch (err) {
             console.error('Google sign in error:', err);
             if (err.code === 'auth/popup-closed-by-user') {

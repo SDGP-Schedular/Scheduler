@@ -10,6 +10,7 @@ import {
     signInWithEmailLink
 } from 'firebase/auth';
 import { auth, setAuthPersistence } from '../../config/firebase';
+import { initializeUserProfile, saveUserProfile } from '../../services/firestoreService';
 import { useLanguage } from '../../i18n/LanguageContext';
 import schedulerLogo from '../../assets/scheduler-logo.png';
 import aiBrain from '../../assets/ai-brain.png';
@@ -194,6 +195,21 @@ const SignUp = () => {
 
             // Redirect to dashboard after successful sign up
             navigate('/dashboard');
+
+            void initializeUserProfile(userCredential.user.uid, userCredential.user.email || formData.email)
+                .catch((error) => {
+                    console.warn('User profile init failed after sign up:', error);
+                });
+
+            void saveUserProfile(userCredential.user.uid, {
+                email: userCredential.user.email || formData.email,
+                displayName: formData.username,
+                firstName: formData.username,
+                phone: formData.phone || '',
+                provider: 'password'
+            }).catch((error) => {
+                console.warn('User profile write failed after sign up:', error);
+            });
         } catch (err) {
             console.error('Sign up error:', err);
             switch (err.code) {
@@ -221,8 +237,22 @@ const SignUp = () => {
         try {
             await setAuthPersistence(rememberMe);
             const provider = new GoogleAuthProvider();
-            await signInWithPopup(auth, provider);
+            const userCredential = await signInWithPopup(auth, provider);
             navigate('/dashboard');
+
+            void initializeUserProfile(userCredential.user.uid, userCredential.user.email || '')
+                .catch((error) => {
+                    console.warn('User profile init failed after Google sign up:', error);
+                });
+
+            void saveUserProfile(userCredential.user.uid, {
+                email: userCredential.user.email || '',
+                displayName: userCredential.user.displayName || 'User',
+                firstName: userCredential.user.displayName || 'User',
+                provider: 'google'
+            }).catch((error) => {
+                console.warn('User profile write failed after Google sign up:', error);
+            });
         } catch (err) {
             console.error('Google sign up error:', err);
             if (err.code === 'auth/popup-closed-by-user') {
